@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
+import { getPlatformStatus } from '../utils/platformDetection'
 
 const actions = ['Profile', 'Tracker']
 const fields = [
@@ -25,6 +26,46 @@ function ProfileInput({ disabled, field, onChange, value }) {
   )
 }
 
+function PlatformStatus({ status, isDetecting }) {
+  if (isDetecting) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="text-sm text-slate-500">Detecting platform...</p>
+      </div>
+    )
+  }
+
+  if (!status) {
+    return null
+  }
+
+  let bgColor = 'bg-slate-50'
+  let borderColor = 'border-slate-200'
+  let textColor = 'text-slate-700'
+
+  if (status.type === 'supported') {
+    bgColor = 'bg-emerald-50'
+    borderColor = 'border-emerald-200'
+    textColor = 'text-emerald-700'
+  } else if (status.type === 'unsupported') {
+    bgColor = 'bg-amber-50'
+    borderColor = 'border-amber-200'
+    textColor = 'text-amber-700'
+  } else if (status.type === 'error') {
+    bgColor = 'bg-red-50'
+    borderColor = 'border-red-200'
+    textColor = 'text-red-700'
+  }
+
+  return (
+    <div
+      className={`rounded-md border ${borderColor} ${bgColor} px-3 py-2`}
+    >
+      <p className={`text-sm font-medium ${textColor}`}>{status.message}</p>
+    </div>
+  )
+}
+
 function Popup() {
   const [profile, setProfile] = useState(emptyProfile)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
@@ -32,13 +73,16 @@ function Popup() {
   const [isSaving, setIsSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [platformStatus, setPlatformStatus] = useState(null)
+  const [isDetectingPlatform, setIsDetectingPlatform] = useState(true)
   const savedMessageTimeoutRef = useRef(null)
 
   useEffect(() => {
     let isMounted = true
 
-    async function loadSavedProfile() {
+    async function loadInitialData() {
       try {
+        // Load saved profile
         const savedProfile = await getProfile()
 
         if (isMounted) {
@@ -54,9 +98,31 @@ function Popup() {
           setIsLoadingProfile(false)
         }
       }
+
+      // Detect current platform
+      try {
+        const status = await getPlatformStatus()
+
+        if (isMounted) {
+          setPlatformStatus(status)
+        }
+      } catch (error) {
+        console.error('Failed to detect platform:', error)
+        if (isMounted) {
+          setPlatformStatus({
+            message: 'Unable to detect platform',
+            type: 'error',
+            name: null,
+          })
+        }
+      } finally {
+        if (isMounted) {
+          setIsDetectingPlatform(false)
+        }
+      }
     }
 
-    loadSavedProfile()
+    loadInitialData()
 
     return () => {
       isMounted = false
@@ -116,7 +182,9 @@ function Popup() {
         </div>
       </header>
 
-      <div className="mb-4 grid grid-cols-2 gap-1.5">
+      <PlatformStatus isDetecting={isDetectingPlatform} status={platformStatus} />
+
+      <div className="mb-4 mt-4 grid grid-cols-2 gap-1.5">
         {actions.map((action) => (
           <button
             className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"

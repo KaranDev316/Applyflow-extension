@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
 
-const actions = ['Profile', 'Edit Profile', 'Tracker']
+const actions = ['Profile', 'Tracker']
 const fields = [
   { id: 'name', label: 'Name', type: 'text' },
   { id: 'email', label: 'Email', type: 'email' },
@@ -88,8 +88,8 @@ function Popup() {
   }
 
   return (
-    <main className="w-80 bg-white p-5 text-slate-900">
-      <header className="mb-5 flex items-center gap-3">
+    <main className="w-80 bg-white p-4 text-slate-900">
+      <header className="mb-4 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-sm font-semibold text-white">
           AF
         </div>
@@ -99,10 +99,10 @@ function Popup() {
         </div>
       </header>
 
-      <div className="mb-5 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-2 gap-1.5">
         {actions.map((action) => (
           <button
-            className="rounded-md border border-slate-200 px-2 py-2 text-sm font-medium transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900"
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
             key={action}
             type="button"
           >
@@ -111,7 +111,7 @@ function Popup() {
         ))}
       </div>
 
-      <form className="grid gap-3" onSubmit={handleSubmit}>
+      <form className="grid gap-2.5" onSubmit={handleSubmit}>
         {isLoadingProfile && (
           <p className="text-sm text-slate-500">Loading profile...</p>
         )}
@@ -120,10 +120,10 @@ function Popup() {
         )}
 
         {fields.map((field) => (
-          <label className="grid gap-1.5 text-sm font-medium" htmlFor={field.id} key={field.id}>
+          <label className="grid gap-1 text-sm font-medium" htmlFor={field.id} key={field.id}>
             {field.label}
             <input
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-normal outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
               disabled={isLoadingProfile}
               id={field.id}
               name={field.id}
@@ -135,7 +135,7 @@ function Popup() {
         ))}
 
         <button
-          className="mt-1 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="mt-1 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
           disabled={isLoadingProfile || isSaving}
           type="submit"
         >

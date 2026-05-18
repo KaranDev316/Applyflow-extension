@@ -7,6 +7,40 @@ const fields = [
   { id: 'linkedin', label: 'LinkedIn', type: 'url' },
 ]
 
+const emptyProfile = {
+  name: '',
+  email: '',
+  linkedin: '',
+}
+
+function normalizeProfile(profile = {}) {
+  return {
+    name: profile.name ?? '',
+    email: profile.email ?? '',
+    linkedin: profile.linkedin ?? '',
+  }
+}
+
+function loadProfile() {
+  return new Promise((resolve, reject) => {
+    if (!globalThis.chrome?.storage?.local) {
+      resolve(emptyProfile)
+      return
+    }
+
+    globalThis.chrome.storage.local.get('profile', (result) => {
+      const error = globalThis.chrome.runtime?.lastError
+
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve(normalizeProfile(result.profile))
+    })
+  })
+}
+
 function saveProfile(profile) {
   return new Promise((resolve, reject) => {
     if (!globalThis.chrome?.storage?.local) {
@@ -28,16 +62,52 @@ function saveProfile(profile) {
 }
 
 function Popup() {
+  const [profile, setProfile] = useState(emptyProfile)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const savedMessageTimeoutRef = useRef(null)
 
   useEffect(() => {
+    let isMounted = true
+
+    loadProfile()
+      .then((savedProfile) => {
+        if (isMounted) {
+          setProfile(savedProfile)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load profile:', error)
+        if (isMounted) {
+          setLoadError('Unable to load saved profile')
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProfile(false)
+        }
+      })
+
     return () => {
+      isMounted = false
       window.clearTimeout(savedMessageTimeoutRef.current)
     }
   }, [])
+
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target
+
+    setIsSaved(false)
+    setSaveError('')
+
+    setProfile((currentProfile) => ({
+      ...currentProfile,
+      [name]: value,
+    }))
+  }
 
   const showSavedMessage = () => {
     window.clearTimeout(savedMessageTimeoutRef.current)
@@ -51,14 +121,8 @@ function Popup() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     setIsSaving(true)
+    setIsSaved(false)
     setSaveError('')
-
-    const formData = new FormData(event.currentTarget)
-    const profile = {
-      name: formData.get('name'),
-      email: formData.get('email'),
-      linkedin: formData.get('linkedin'),
-    }
 
     console.log('Profile form values:', profile)
 
@@ -98,21 +162,31 @@ function Popup() {
       </div>
 
       <form className="grid gap-3" onSubmit={handleSubmit}>
+        {isLoadingProfile && (
+          <p className="text-sm text-slate-500">Loading profile...</p>
+        )}
+        {loadError && (
+          <p className="text-sm font-medium text-red-600">{loadError}</p>
+        )}
+
         {fields.map((field) => (
           <label className="grid gap-1.5 text-sm font-medium" htmlFor={field.id} key={field.id}>
             {field.label}
             <input
               className="rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+              disabled={isLoadingProfile}
               id={field.id}
               name={field.id}
+              onChange={handleFieldChange}
               type={field.type}
+              value={profile[field.id]}
             />
           </label>
         ))}
 
         <button
           className="mt-1 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
-          disabled={isSaving}
+          disabled={isLoadingProfile || isSaving}
           type="submit"
         >
           {isSaving ? 'Saving...' : 'Save'}

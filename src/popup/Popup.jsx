@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
 import { getPlatformStatus } from '../utils/platformDetection'
+import { triggerAutofillOnPage } from '../utils/messaging'
 
 const actions = ['Profile', 'Tracker']
 const fields = [
@@ -66,6 +67,38 @@ function PlatformStatus({ status, isDetecting }) {
   )
 }
 
+function SmartAutofill({ disabled, isLoading, message, onAutofill, status }) {
+  let buttonClasses =
+    'rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed'
+  let messageClasses = 'text-center text-sm font-medium'
+  let messageBgColor = ''
+
+  if (status === 'success') {
+    buttonClasses += ' bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-600 disabled:bg-emerald-400'
+    messageBgColor = 'text-emerald-600'
+  } else if (status === 'error') {
+    messageBgColor = 'text-red-600'
+    buttonClasses += ' bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-900 disabled:bg-slate-400'
+  } else {
+    buttonClasses += ' bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-900 disabled:bg-slate-400'
+  }
+
+  return (
+    <div className="grid gap-2">
+      <button
+        className={buttonClasses}
+        disabled={disabled || isLoading}
+        onClick={onAutofill}
+        type="button"
+      >
+        {isLoading ? 'Autofilling...' : 'Smart Autofill'}
+      </button>
+
+      {message && <p className={`${messageClasses} ${messageBgColor}`}>{message}</p>}
+    </div>
+  )
+}
+
 function Popup() {
   const [profile, setProfile] = useState(emptyProfile)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
@@ -75,7 +108,11 @@ function Popup() {
   const [saveError, setSaveError] = useState('')
   const [platformStatus, setPlatformStatus] = useState(null)
   const [isDetectingPlatform, setIsDetectingPlatform] = useState(true)
+  const [autofillStatus, setAutofillStatus] = useState('idle')
+  const [autofillMessage, setAutofillMessage] = useState('')
+  const [isAutofilling, setIsAutofilling] = useState(false)
   const savedMessageTimeoutRef = useRef(null)
+  const autofillMessageTimeoutRef = useRef(null)
 
   useEffect(() => {
     let isMounted = true
@@ -127,6 +164,7 @@ function Popup() {
     return () => {
       isMounted = false
       window.clearTimeout(savedMessageTimeoutRef.current)
+      window.clearTimeout(autofillMessageTimeoutRef.current)
     }
   }, [])
 
@@ -170,6 +208,48 @@ function Popup() {
     }
   }
 
+  const showAutofillMessage = (message, type) => {
+    window.clearTimeout(autofillMessageTimeoutRef.current)
+    setAutofillMessage(message)
+    setAutofillStatus(type)
+
+    autofillMessageTimeoutRef.current = window.setTimeout(() => {
+      setAutofillMessage('')
+      setAutofillStatus('idle')
+    }, 3000)
+  }
+
+  const handleAutofill = async () => {
+    if (!platformStatus?.supported) {
+      showAutofillMessage('Unsupported platform', 'error')
+      return
+    }
+
+    setIsAutofilling(true)
+    setAutofillStatus('loading')
+    setAutofillMessage('')
+
+    try {
+      console.log('Popup: Triggering autofill for platform:', platformStatus.name)
+
+      // Send autofill action to content script
+      const result = await triggerAutofillOnPage()
+
+      console.log('Popup: Autofill result:', result)
+
+      if (result.success) {
+        showAutofillMessage(`✓ Filled ${result.filledCount} field(s)`, 'success')
+      } else {
+        showAutofillMessage(result.error || 'Failed to autofill form', 'error')
+      }
+    } catch (error) {
+      console.error('Popup: Autofill error:', error)
+      showAutofillMessage('Failed to autofill form', 'error')
+    } finally {
+      setIsAutofilling(false)
+    }
+  }
+
   return (
     <main className="w-80 bg-white p-4 text-slate-900">
       <header className="mb-4 flex items-center gap-3">
@@ -184,7 +264,17 @@ function Popup() {
 
       <PlatformStatus isDetecting={isDetectingPlatform} status={platformStatus} />
 
-      <div className="mb-4 mt-4 grid grid-cols-2 gap-1.5">
+      <div className="mb-4 mt-4">
+        <SmartAutofill
+          disabled={!platformStatus?.supported || isLoadingProfile || isDetectingPlatform}
+          isLoading={isAutofilling}
+          message={autofillMessage}
+          onAutofill={handleAutofill}
+          status={autofillStatus}
+        />
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-1.5">
         {actions.map((action) => (
           <button
             className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"

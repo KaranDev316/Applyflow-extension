@@ -1,3 +1,3 @@
-chrome.runtime.onInstalled.addListener(() => {
+globalThis.chrome.runtime.onInstalled.addListener(() => {
   console.log('ApplyFlow extension installed')
 })

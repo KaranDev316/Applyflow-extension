@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const actions = ['Profile', 'Edit Profile', 'Tracker']
 const fields = [
@@ -7,11 +7,51 @@ const fields = [
   { id: 'linkedin', label: 'LinkedIn', type: 'url' },
 ]
 
+function saveProfile(profile) {
+  return new Promise((resolve, reject) => {
+    if (!globalThis.chrome?.storage?.local) {
+      reject(new Error('chrome.storage.local is unavailable'))
+      return
+    }
+
+    globalThis.chrome.storage.local.set({ profile }, () => {
+      const error = globalThis.chrome.runtime?.lastError
+
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve()
+    })
+  })
+}
+
 function Popup() {
   const [isSaved, setIsSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const savedMessageTimeoutRef = useRef(null)
 
-  const handleSubmit = (event) => {
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(savedMessageTimeoutRef.current)
+    }
+  }, [])
+
+  const showSavedMessage = () => {
+    window.clearTimeout(savedMessageTimeoutRef.current)
+    setIsSaved(true)
+
+    savedMessageTimeoutRef.current = window.setTimeout(() => {
+      setIsSaved(false)
+    }, 2000)
+  }
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    setIsSaving(true)
+    setSaveError('')
 
     const formData = new FormData(event.currentTarget)
     const profile = {
@@ -21,11 +61,16 @@ function Popup() {
     }
 
     console.log('Profile form values:', profile)
-    setIsSaved(true)
 
-    window.setTimeout(() => {
-      setIsSaved(false)
-    }, 2000)
+    try {
+      await saveProfile(profile)
+      showSavedMessage()
+    } catch (error) {
+      console.error('Failed to save profile:', error)
+      setSaveError('Unable to save profile')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -66,14 +111,18 @@ function Popup() {
         ))}
 
         <button
-          className="mt-1 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+          className="mt-1 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
+          disabled={isSaving}
           type="submit"
         >
-          Save
+          {isSaving ? 'Saving...' : 'Save'}
         </button>
 
         {isSaved && (
           <p className="text-center text-sm font-medium text-emerald-600">Profile Saved</p>
+        )}
+        {saveError && (
+          <p className="text-center text-sm font-medium text-red-600">{saveError}</p>
         )}
       </form>
     </main>

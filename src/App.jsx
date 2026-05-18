@@ -1,13 +1,7 @@
-
+import Popup from './popup/Popup.jsx'
 
 function App() {
-
-
-  return (
-    <>
-      <p className='text-white bg-blue-500'>hello</p>
-    </>
-  )
+  return <Popup />
 }
 
 export default App

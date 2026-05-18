@@ -11,7 +11,8 @@
     "https://*.lever.co/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -19,7 +20,7 @@
         "https://*.greenhouse.io/*",
         "https://*.lever.co/*"
       ],
-      "js": ["content.js"]
+      "js": ["src/content.js"]
     }
   ]
 }

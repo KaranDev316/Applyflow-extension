@@ -8,6 +8,14 @@ import { dirname, resolve } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+function stableJsFileName(chunkInfo) {
+  const name = chunkInfo.name.endsWith('.js')
+    ? chunkInfo.name.slice(0, -3)
+    : chunkInfo.name
+
+  return `assets/${name}.js`
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: './',
@@ -16,6 +24,11 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         popup: resolve(__dirname, 'popup.html'),
+      },
+      output: {
+        entryFileNames: stableJsFileName,
+        chunkFileNames: stableJsFileName,
+        assetFileNames: 'assets/[name][extname]',
       },
     },
   },

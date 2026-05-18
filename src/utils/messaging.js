@@ -2,6 +2,53 @@
  * Utility functions for message passing between popup and content scripts
  */
 
+async function getActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+
+  if (!tab?.id) {
+    throw new Error('No active tab found')
+  }
+
+  return tab
+}
+
+function getContentScriptFiles() {
+  return chrome.runtime
+    .getManifest()
+    .content_scripts
+    ?.flatMap((contentScript) => contentScript.js || [])
+    || []
+}
+
+function isMissingReceiverError(error) {
+  return /receiving end does not exist|could not establish connection|no response/i.test(
+    error.message,
+  )
+}
+
+function sendTabMessage(tabId, action, data = {}) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      {
+        action,
+        ...data,
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+        } else if (response && response.success === false) {
+          reject(new Error(response.error || 'Content script error'))
+        } else if (!response) {
+          reject(new Error('No response from content script'))
+        } else {
+          resolve(response)
+        }
+      },
+    )
+  })
+}
+
 /**
  * Send a message to the content script on the active tab
  * @param {string} action - The action to perform (e.g., 'autofill', 'detectFields')
@@ -10,36 +57,57 @@
  */
 export async function sendMessageToContentScript(action, data = {}) {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    const tab = await getActiveTab()
 
-    if (!tab?.id) {
-      throw new Error('No active tab found')
-    }
-
-    return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(
-        tab.id,
-        {
-          action,
-          ...data,
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message))
-          } else if (response && response.success === false) {
-            reject(new Error(response.error || 'Content script error'))
-          } else if (!response) {
-            reject(new Error('No response from content script'))
-          } else {
-            resolve(response)
-          }
-        },
-      )
+    console.log('ApplyFlow popup: Sending message to content script', {
+      action,
+      tabId: tab.id,
+      url: tab.url,
     })
+
+    try {
+      return await sendTabMessage(tab.id, action, data)
+    } catch (error) {
+      if (!isMissingReceiverError(error)) {
+        throw error
+      }
+
+      console.warn('ApplyFlow popup: Content script missing; injecting fallback', {
+        action,
+        error: error.message,
+      })
+
+      await injectContentScriptIntoActiveTab(tab)
+      return sendTabMessage(tab.id, action, data)
+    }
   } catch (error) {
     console.error('Failed to send message to content script:', error)
     throw error
   }
+}
+
+/**
+ * Programmatically inject the declared content script into the active tab.
+ * This recovers tabs that were already open when the extension was loaded.
+ */
+export async function injectContentScriptIntoActiveTab(activeTab) {
+  const tab = activeTab || await getActiveTab()
+  const files = getContentScriptFiles()
+
+  if (files.length === 0) {
+    throw new Error('No content script files are declared in the manifest')
+  }
+
+  console.log('ApplyFlow popup: Injecting content script into active tab', {
+    tabId: tab.id,
+    url: tab.url,
+    files,
+  })
+
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id, allFrames: true },
+    files,
+  })
 }
 
 /**
@@ -71,14 +139,15 @@ export async function triggerAutofillOnPage() {
 }
 
 /**
- * Verify content script is active
+ * Verify content script is active, injecting it if Chrome has not loaded it.
  * @returns {Promise<boolean>} True if content script is active
  */
 export async function isContentScriptActive() {
   try {
     const response = await sendMessageToContentScript('ping')
     return response && response.success
-  } catch {
+  } catch (error) {
+    console.warn('ApplyFlow popup: Content script ping failed:', error.message)
     return false
   }
 }

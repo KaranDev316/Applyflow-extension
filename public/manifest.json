@@ -7,7 +7,9 @@
   },
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
+    "https://greenhouse.io/*",
     "https://*.greenhouse.io/*",
+    "https://lever.co/*",
     "https://*.lever.co/*"
   ],
   "background": {
@@ -17,10 +19,14 @@
   "content_scripts": [
     {
       "matches": [
+        "https://greenhouse.io/*",
         "https://*.greenhouse.io/*",
+        "https://lever.co/*",
         "https://*.lever.co/*"
       ],
-      "js": ["src/content.js"]
+      "js": ["src/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ]
 }

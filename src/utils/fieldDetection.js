@@ -1,107 +1,152 @@
 /**
- * Field detection utilities for Greenhouse and Lever application forms
+ * Field detection utilities for Greenhouse and Lever application forms.
+ *
+ * Detects: text inputs, email, tel, url, textarea, select, and checkbox fields.
  */
 
+// ---------------------------------------------------------------------------
+// Keyword matchers – each field type has a list of substrings that are checked
+// against a field's name, id, placeholder, label, and aria-label.
+// ---------------------------------------------------------------------------
+
+const FIELD_KEYWORDS = {
+  name: ['name'],
+  email: ['email'],
+  phone: ['phone', 'telephone', 'mobile'],
+  linkedin: ['linkedin'],
+  resume: ['resume', 'cv'],
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Detect form fields on the page
- * @returns {object} Detected fields with their properties
+ * Get the visible label text associated with an input element.
+ * Checks for a `<label for="...">` first, then a wrapping `<label>`.
+ */
+function getAssociatedLabel(input) {
+  if (input.id) {
+    const label = document.querySelector(`label[for="${input.id}"]`)
+    if (label) return label.textContent.trim()
+  }
+
+  const parentLabel = input.closest('label')
+  if (parentLabel) return parentLabel.textContent.trim()
+
+  return ''
+}
+
+/**
+ * Gather all searchable identifiers for a form element into a single
+ * lower-cased string so keyword matching can be done with one `includes`.
+ */
+function getSearchableText(element) {
+  return [
+    element.name || '',
+    element.id || '',
+    element.placeholder || '',
+    getAssociatedLabel(element),
+    element.getAttribute('aria-label') || '',
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+/**
+ * Check whether any of the given keywords appear in the searchable text.
+ */
+function matchesKeywords(searchableText, keywords) {
+  return keywords.some((kw) => searchableText.includes(kw))
+}
+
+/**
+ * Build a lightweight info object for a detected element.
+ */
+function buildFieldInfo(element) {
+  return {
+    element,
+    name: element.name || '',
+    id: element.id || '',
+    placeholder: element.placeholder || '',
+    type: element.type || element.tagName.toLowerCase(),
+    tagName: element.tagName.toLowerCase(),
+    value: element.type === 'checkbox' ? element.checked : element.value,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect all relevant form fields on the current page.
+ *
+ * @returns {{ name: Array, email: Array, phone: Array, linkedin: Array,
+ *             resume: Array, textarea: Array, select: Array, checkbox: Array }}
  */
 export function detectFormFields() {
   const fields = {
     name: [],
     email: [],
-    linkedin: [],
     phone: [],
+    linkedin: [],
     resume: [],
+    textarea: [],
+    select: [],
+    checkbox: [],
   }
 
-  // Detect input fields
-  const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="url"], input[type="tel"], textarea')
+  // --- Text-like inputs (text, email, url, tel) ---
+  const textInputs = document.querySelectorAll(
+    'input[type="text"], input[type="email"], input[type="url"], input[type="tel"]',
+  )
 
-  inputs.forEach((input) => {
-    const name = (input.name || '').toLowerCase()
-    const id = (input.id || '').toLowerCase()
-    const placeholder = (input.placeholder || '').toLowerCase()
-    const label = getAssociatedLabel(input)?.toLowerCase() || ''
-    const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase()
+  textInputs.forEach((input) => {
+    const text = getSearchableText(input)
+    const info = buildFieldInfo(input)
 
-    const fieldInfo = {
-      element: input,
-      name: input.name,
-      id: input.id,
-      placeholder: input.placeholder,
-      type: input.type,
-      value: input.value,
-    }
-
-    // Check for name field
-    if (
-      name.includes('name') ||
-      id.includes('name') ||
-      placeholder.includes('name') ||
-      label.includes('name') ||
-      ariaLabel.includes('name')
-    ) {
-      fields.name.push(fieldInfo)
-    }
-
-    // Check for email field
-    if (
-      input.type === 'email' ||
-      name.includes('email') ||
-      id.includes('email') ||
-      placeholder.includes('email') ||
-      label.includes('email') ||
-      ariaLabel.includes('email')
-    ) {
-      fields.email.push(fieldInfo)
-    }
-
-    // Check for LinkedIn field
-    if (
-      name.includes('linkedin') ||
-      id.includes('linkedin') ||
-      placeholder.includes('linkedin') ||
-      label.includes('linkedin') ||
-      ariaLabel.includes('linkedin')
-    ) {
-      fields.linkedin.push(fieldInfo)
-    }
-
-    // Check for phone field
-    if (
-      input.type === 'tel' ||
-      name.includes('phone') ||
-      name.includes('telephone') ||
-      id.includes('phone') ||
-      placeholder.includes('phone') ||
-      label.includes('phone') ||
-      ariaLabel.includes('phone')
-    ) {
-      fields.phone.push(fieldInfo)
+    if (input.type === 'email' || matchesKeywords(text, FIELD_KEYWORDS.email)) {
+      fields.email.push(info)
+    } else if (input.type === 'tel' || matchesKeywords(text, FIELD_KEYWORDS.phone)) {
+      fields.phone.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.linkedin)) {
+      fields.linkedin.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.name)) {
+      fields.name.push(info)
     }
   })
 
-  // Detect file inputs (resume/CV)
+  // --- Textareas ---
+  const textareas = document.querySelectorAll('textarea')
+  textareas.forEach((ta) => {
+    const info = buildFieldInfo(ta)
+    fields.textarea.push(info)
+  })
+
+  // --- Select / Dropdown ---
+  const selects = document.querySelectorAll('select')
+  selects.forEach((sel) => {
+    const info = buildFieldInfo(sel)
+    info.options = Array.from(sel.options).map((opt) => ({
+      value: opt.value,
+      text: opt.textContent.trim(),
+    }))
+    fields.select.push(info)
+  })
+
+  // --- Checkboxes ---
+  const checkboxes = document.querySelectorAll('input[type="checkbox"]')
+  checkboxes.forEach((cb) => {
+    const info = buildFieldInfo(cb)
+    fields.checkbox.push(info)
+  })
+
+  // --- File inputs (resume / CV) ---
   const fileInputs = document.querySelectorAll('input[type="file"]')
   fileInputs.forEach((input) => {
-    const name = (input.name || '').toLowerCase()
-    const id = (input.id || '').toLowerCase()
-    const placeholder = (input.placeholder || '').toLowerCase()
-    const label = getAssociatedLabel(input)?.toLowerCase() || ''
-    const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase()
-
-    if (
-      name.includes('resume') ||
-      name.includes('cv') ||
-      id.includes('resume') ||
-      id.includes('cv') ||
-      placeholder.includes('resume') ||
-      label.includes('resume') ||
-      ariaLabel.includes('resume') ||
-      label.includes('cv') ||
-      ariaLabel.includes('cv')
-    ) {
+    const text = getSearchableText(input)
+    if (matchesKeywords(text, FIELD_KEYWORDS.resume)) {
       fields.resume.push({
         element: input,
         name: input.name,
@@ -115,27 +160,7 @@ export function detectFormFields() {
 }
 
 /**
- * Get the associated label for an input element
- * @param {HTMLElement} input - The input element
- * @returns {string} The label text or empty string
- */
-function getAssociatedLabel(input) {
-  if (input.id) {
-    const label = document.querySelector(`label[for="${input.id}"]`)
-    if (label) return label.textContent.trim()
-  }
-
-  // Check parent label
-  const parentLabel = input.closest('label')
-  if (parentLabel) return parentLabel.textContent.trim()
-
-  return ''
-}
-
-/**
- * Format detected fields for logging
- * @param {object} fields - Detected fields object
- * @returns {object} Formatted fields summary
+ * Format detected fields for safe logging (strips DOM element references).
  */
 export function formatFieldsForLogging(fields) {
   const summary = {}

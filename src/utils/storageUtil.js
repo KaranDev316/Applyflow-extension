@@ -13,7 +13,7 @@ export async function getProfileFromStorage() {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
         } else {
-          const profile = result.profile || { name: '', email: '', linkedin: '' }
+          const profile = result.profile || { name: '', email: '', phone: '', linkedin: '' }
           resolve(profile)
         }
       })

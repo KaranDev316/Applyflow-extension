@@ -75,7 +75,8 @@ export async function detectCurrentTabPlatform() {
 /**
  * Get human-readable status message for current tab
  * @returns {Promise<object>} Status object with message and type
- *          { message: string, type: 'supported'|'unsupported'|'error', name: string|null }
+ *          { message: string, type: 'supported'|'unsupported'|'error',
+ *            platform: string|null, name: string|null, supported: boolean }
  */
 export async function getPlatformStatus() {
   const detection = await detectCurrentTabPlatform()
@@ -84,7 +85,9 @@ export async function getPlatformStatus() {
     return {
       message: detection.error,
       type: 'error',
+      platform: null,
       name: null,
+      supported: false,
     }
   }
 
@@ -92,13 +95,17 @@ export async function getPlatformStatus() {
     return {
       message: `✓ ${detection.name} is supported`,
       type: 'supported',
+      platform: detection.platform,
       name: detection.name,
+      supported: true,
     }
   }
 
   return {
     message: '⚠ This site is not supported. Please visit Greenhouse or Lever.',
     type: 'unsupported',
+    platform: detection.platform,
     name: null,
+    supported: false,
   }
 }

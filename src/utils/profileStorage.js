@@ -1,6 +1,7 @@
 export const emptyProfile = {
   name: '',
   email: '',
+  phone: '',
   linkedin: '',
 }
 
@@ -16,6 +17,7 @@ function normalizeProfile(profile = {}) {
   return {
     name: profile.name ?? '',
     email: profile.email ?? '',
+    phone: profile.phone ?? '',
     linkedin: profile.linkedin ?? '',
   }
 }

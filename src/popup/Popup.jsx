@@ -7,6 +7,7 @@ const actions = ['Profile', 'Tracker']
 const fields = [
   { id: 'name', label: 'Name', type: 'text' },
   { id: 'email', label: 'Email', type: 'email' },
+  { id: 'phone', label: 'Phone', type: 'tel' },
   { id: 'linkedin', label: 'LinkedIn', type: 'url' },
 ]
 
@@ -113,6 +114,7 @@ function Popup() {
   const [isAutofilling, setIsAutofilling] = useState(false)
   const savedMessageTimeoutRef = useRef(null)
   const autofillMessageTimeoutRef = useRef(null)
+  const isPlatformSupported = platformStatus?.supported === true
 
   useEffect(() => {
     let isMounted = true
@@ -149,7 +151,9 @@ function Popup() {
           setPlatformStatus({
             message: 'Unable to detect platform',
             type: 'error',
+            platform: null,
             name: null,
+            supported: false,
           })
         }
       } finally {
@@ -220,7 +224,7 @@ function Popup() {
   }
 
   const handleAutofill = async () => {
-    if (!platformStatus?.supported) {
+    if (!isPlatformSupported) {
       showAutofillMessage('Unsupported platform', 'error')
       return
     }
@@ -273,7 +277,7 @@ function Popup() {
 
       <div className="mb-4 mt-4">
         <SmartAutofill
-          disabled={!platformStatus?.supported || isLoadingProfile || isDetectingPlatform}
+          disabled={!isPlatformSupported || isLoadingProfile || isDetectingPlatform}
           isLoading={isAutofilling}
           message={autofillMessage}
           onAutofill={handleAutofill}

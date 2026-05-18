@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
 import { getPlatformStatus } from '../utils/platformDetection'
-import { isContentScriptActive, triggerAutofillOnPage } from '../utils/messaging'
+import { isContentScriptActive, triggerAutofillOnPage, extractMetadataFromPage } from '../utils/messaging'
+import { getAutofillStats } from '../utils/autofillStats'
 
 const actions = ['Profile', 'Tracker']
 const fields = [
@@ -68,7 +69,32 @@ function PlatformStatus({ status, isDetecting }) {
   )
 }
 
-function SmartAutofill({ disabled, isLoading, message, onAutofill, status }) {
+function JobMetadata({ metadata }) {
+  if (!metadata || (!metadata.company && !metadata.role)) return null
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      {metadata.role && (
+        <p className="text-sm font-medium text-slate-700 truncate">{metadata.role}</p>
+      )}
+      {metadata.company && (
+        <p className="text-xs text-slate-500 truncate">{metadata.company}</p>
+      )}
+    </div>
+  )
+}
+
+function AutofillStatsDisplay({ stats }) {
+  if (!stats || stats.totalRuns === 0) return null
+
+  return (
+    <p className="text-center text-xs text-slate-400">
+      {stats.totalRuns} autofill{stats.totalRuns !== 1 ? 's' : ''} · {stats.totalFieldsFilled} field{stats.totalFieldsFilled !== 1 ? 's' : ''} filled
+    </p>
+  )
+}
+
+function SmartAutofill({ disabled, isLoading, message, onAutofill, status, stats }) {
   let buttonClasses =
     'rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed'
   let messageClasses = 'text-center text-sm font-medium'
@@ -96,6 +122,7 @@ function SmartAutofill({ disabled, isLoading, message, onAutofill, status }) {
       </button>
 
       {message && <p className={`${messageClasses} ${messageBgColor}`}>{message}</p>}
+      <AutofillStatsDisplay stats={stats} />
     </div>
   )
 }
@@ -112,6 +139,8 @@ function Popup() {
   const [autofillStatus, setAutofillStatus] = useState('idle')
   const [autofillMessage, setAutofillMessage] = useState('')
   const [isAutofilling, setIsAutofilling] = useState(false)
+  const [jobMetadata, setJobMetadata] = useState(null)
+  const [autofillStatsData, setAutofillStatsData] = useState(null)
   const savedMessageTimeoutRef = useRef(null)
   const autofillMessageTimeoutRef = useRef(null)
   const isPlatformSupported = platformStatus?.supported === true
@@ -145,6 +174,18 @@ function Popup() {
         if (isMounted) {
           setPlatformStatus(status)
         }
+
+        // If supported, extract metadata from page
+        if (status?.type === 'supported') {
+          try {
+            const metaResult = await extractMetadataFromPage()
+            if (isMounted && metaResult?.metadata) {
+              setJobMetadata(metaResult.metadata)
+            }
+          } catch (metaError) {
+            console.warn('Failed to extract metadata:', metaError)
+          }
+        }
       } catch (error) {
         console.error('Failed to detect platform:', error)
         if (isMounted) {
@@ -160,6 +201,16 @@ function Popup() {
         if (isMounted) {
           setIsDetectingPlatform(false)
         }
+      }
+
+      // Load autofill stats
+      try {
+        const stats = await getAutofillStats()
+        if (isMounted) {
+          setAutofillStatsData(stats)
+        }
+      } catch (statsError) {
+        console.warn('Failed to load autofill stats:', statsError)
       }
     }
 
@@ -250,6 +301,21 @@ function Popup() {
 
       if (result.success) {
         showAutofillMessage(`✓ Filled ${result.filledCount} field(s)`, 'success')
+
+        // Update metadata if returned from autofill
+        if (result.metadata) {
+          setJobMetadata(result.metadata)
+        }
+
+        // Refresh stats after successful autofill
+        try {
+          const updatedStats = await getAutofillStats()
+          setAutofillStatsData(updatedStats)
+        } catch {
+          // non-critical
+        }
+      } else if (result.duplicate) {
+        showAutofillMessage('Autofill already in progress', 'error')
       } else {
         showAutofillMessage(result.error || 'Failed to autofill form', 'error')
       }
@@ -275,12 +341,19 @@ function Popup() {
 
       <PlatformStatus isDetecting={isDetectingPlatform} status={platformStatus} />
 
+      {jobMetadata && (
+        <div className="mt-2">
+          <JobMetadata metadata={jobMetadata} />
+        </div>
+      )}
+
       <div className="mb-4 mt-4">
         <SmartAutofill
           disabled={!isPlatformSupported || isLoadingProfile || isDetectingPlatform}
           isLoading={isAutofilling}
           message={autofillMessage}
           onAutofill={handleAutofill}
+          stats={autofillStatsData}
           status={autofillStatus}
         />
       </div>

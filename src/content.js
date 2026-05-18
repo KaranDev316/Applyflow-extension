@@ -1,7 +1,7 @@
 /**
  * Content script for ApplyFlow Chrome extension
  * Runs on Greenhouse and Lever application pages
- * Handles field detection and autofill operations
+ * Handles field detection, metadata extraction, and autofill operations.
  */
 
 import { detectFormFields, formatFieldsForLogging } from './utils/fieldDetection.js'
@@ -11,6 +11,12 @@ import {
   autofillCheckboxes,
   autofillSelects,
 } from './utils/autofillEngine.js'
+import { extractPageMetadata } from './utils/metadataExtractor.js'
+import { recordAutofillRun } from './utils/autofillStats.js'
+
+// ---------------------------------------------------------------------------
+// Duplicate-load guard
+// ---------------------------------------------------------------------------
 
 const wasContentScriptLoaded = globalThis.__APPLYFLOW_CONTENT_SCRIPT_LOADED__ === true
 
@@ -21,9 +27,24 @@ if (wasContentScriptLoaded) {
   console.log('ApplyFlow content script loaded')
 }
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const PAGE_READY_DELAY_MS = 250
 const FIELD_DETECTION_RETRIES = 10
 const FIELD_DETECTION_RETRY_MS = 250
+const MUTATION_WAIT_MS = 1500 // max time to wait for DOM mutations
+
+// ---------------------------------------------------------------------------
+// Duplicate-autofill guard
+// ---------------------------------------------------------------------------
+
+let isAutofillRunning = false
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function logPageState(eventName, extra = {}) {
   console.log('ApplyFlow:', eventName, {
@@ -31,6 +52,12 @@ function logPageState(eventName, extra = {}) {
     readyState: document.readyState,
     time: Math.round(performance.now()),
     ...extra,
+  })
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
   })
 }
 
@@ -52,6 +79,43 @@ function waitForPageReady() {
   })
 }
 
+/**
+ * Wait for DOM mutations to settle (React / dynamic form rendering).
+ * Resolves once no new mutations are observed for a short quiet period,
+ * or after MUTATION_WAIT_MS, whichever comes first.
+ */
+function waitForDomStable() {
+  return new Promise((resolve) => {
+    let timer = null
+    const QUIET_MS = 200
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        observer.disconnect()
+        resolve()
+      }, QUIET_MS)
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+
+    // Start the quiet timer immediately in case no mutations happen
+    timer = setTimeout(() => {
+      observer.disconnect()
+      resolve()
+    }, QUIET_MS)
+
+    // Hard cap so we never wait forever
+    setTimeout(() => {
+      observer.disconnect()
+      resolve()
+    }, MUTATION_WAIT_MS)
+  })
+}
+
 function getFieldCount(fields) {
   return Object.values(fields).reduce(
     (total, fieldList) => total + fieldList.length,
@@ -68,11 +132,9 @@ function summarizeProfile(profile) {
   }
 }
 
-function wait(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
-}
+// ---------------------------------------------------------------------------
+// Retry-aware field detection
+// ---------------------------------------------------------------------------
 
 async function detectFieldsWhenReady() {
   let fields = detectFormFields()
@@ -93,8 +155,12 @@ async function detectFieldsWhenReady() {
   return { fields, fieldCount }
 }
 
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
 /**
- * Detect all form fields on the current page
+ * Detect all form fields on the current page.
  */
 function handleDetectFields() {
   try {
@@ -102,10 +168,7 @@ function handleDetectFields() {
     const fieldsLog = formatFieldsForLogging(fields)
     const fieldCount = getFieldCount(fields)
 
-    console.log('ApplyFlow: Detected form fields:', {
-      fieldCount,
-      fields: fieldsLog,
-    })
+    console.log('ApplyFlow: Detected form fields:', { fieldCount, fields: fieldsLog })
 
     return {
       success: true,
@@ -114,72 +177,114 @@ function handleDetectFields() {
     }
   } catch (error) {
     console.error('ApplyFlow: Error detecting fields:', error)
-    return {
-      success: false,
-      error: error.message,
-    }
+    return { success: false, error: error.message }
   }
 }
 
 /**
- * Perform autofill operation with profile data using the autofill engine.
+ * Extract metadata (company, role) from the current page.
+ */
+function handleExtractMetadata() {
+  try {
+    const metadata = extractPageMetadata()
+    console.log('ApplyFlow: Extracted metadata:', metadata)
+    return { success: true, metadata }
+  } catch (error) {
+    console.error('ApplyFlow: Metadata extraction error:', error)
+    return { success: false, error: error.message, metadata: { company: '', role: '' } }
+  }
+}
+
+/**
+ * Perform autofill operation with profile data.
+ * Prevents concurrent runs via the `isAutofillRunning` guard.
  */
 async function handleAutofill() {
+  // --- Duplicate guard ---
+  if (isAutofillRunning) {
+    console.warn('ApplyFlow: Autofill already in progress — skipping duplicate request')
+    return {
+      success: false,
+      error: 'Autofill already in progress',
+      duplicate: true,
+    }
+  }
+
+  isAutofillRunning = true
+
   try {
     logPageState('Autofill requested')
 
     await waitForPageReady()
-    logPageState('Page ready for autofill')
 
-    // Get profile data from storage
+    // Wait for React / dynamic forms to finish rendering
+    await waitForDomStable()
+    logPageState('DOM stable, proceeding with autofill')
+
+    // Get profile data
     const profile = await getProfileFromStorage()
     console.log('ApplyFlow: Loaded profile summary:', summarizeProfile(profile))
 
-    // Detect form fields
+    // Detect fields with retry
     const { fields, fieldCount } = await detectFieldsWhenReady()
     const fieldsLog = formatFieldsForLogging(fields)
 
-    console.log('ApplyFlow: Starting autofill with detected fields:', {
-      fieldCount,
-      fields: fieldsLog,
-    })
+    console.log('ApplyFlow: Starting autofill with detected fields:', { fieldCount, fields: fieldsLog })
 
-    // 1. Fill profile-mapped text fields (name, email, phone, linkedin)
+    // 1. Fill profile-mapped text fields
     const result = autofillFromProfile(profile, fields)
 
-    // 2. Try to fill relevant select/dropdown fields
+    // 2. Fill select/dropdown fields
     const selectsFilled = autofillSelects(fields.select, profile)
 
-    // 3. Check consent/agreement checkboxes
+    // 3. Check consent checkboxes
     const checkboxesFilled = autofillCheckboxes(fields.checkbox)
 
     const totalFilled = result.filledCount + selectsFilled + checkboxesFilled
+
+    // 4. Extract page metadata
+    const metadata = extractPageMetadata()
 
     console.log('ApplyFlow: Autofill completed', {
       profileFields: result.filledCount,
       selects: selectsFilled,
       checkboxes: checkboxesFilled,
       total: totalFilled,
+      metadata,
       details: result.details,
+    })
+
+    // 5. Record stats
+    const outcome = { success: true, filledCount: totalFilled }
+    await recordAutofillRun(outcome).catch((err) => {
+      console.warn('ApplyFlow: Failed to record autofill stats', err)
     })
 
     return {
       success: true,
       filledCount: totalFilled,
       message: `Autofilled ${totalFilled} field(s)`,
+      metadata,
+      details: result.details,
     }
   } catch (error) {
     console.error('ApplyFlow: Autofill error:', error)
+
+    await recordAutofillRun({ success: false, filledCount: 0 }).catch(() => {})
+
     return {
       success: false,
       error: error.message,
     }
+  } finally {
+    isAutofillRunning = false
   }
 }
 
-/**
- * Set up message listener for communication with popup
- */
+// ---------------------------------------------------------------------------
+// Message listener (registered once)
+// ---------------------------------------------------------------------------
+
 if (!wasContentScriptLoaded) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('ApplyFlow: Received message:', message.action)
@@ -187,19 +292,14 @@ if (!wasContentScriptLoaded) {
     if (message.action === 'detectFields') {
       const result = handleDetectFields()
       sendResponse(result)
+    } else if (message.action === 'extractMetadata') {
+      const result = handleExtractMetadata()
+      sendResponse(result)
     } else if (message.action === 'autofill') {
       handleAutofill()
-        .then((result) => {
-          sendResponse(result)
-        })
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error.message,
-          })
-        })
-      // Return true to indicate we'll send response asynchronously
-      return true
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse({ success: false, error: error.message }))
+      return true // async response
     } else if (message.action === 'ping') {
       sendResponse({
         success: true,
@@ -213,10 +313,10 @@ if (!wasContentScriptLoaded) {
   })
 }
 
-/**
- * Avoid touching the host page's React-controlled form during its hydration.
- * Field detection now runs only when the popup explicitly asks for it.
- */
+// ---------------------------------------------------------------------------
+// Page load logging
+// ---------------------------------------------------------------------------
+
 window.addEventListener('load', () => {
   logPageState('Page fully loaded')
 })

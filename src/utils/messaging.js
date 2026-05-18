@@ -139,6 +139,20 @@ export async function triggerAutofillOnPage() {
 }
 
 /**
+ * Extract page metadata (company name, role title) via content script
+ * @returns {Promise<object>} Metadata result { success, metadata: { company, role } }
+ */
+export async function extractMetadataFromPage() {
+  try {
+    const response = await sendMessageToContentScript('extractMetadata')
+    return response
+  } catch (error) {
+    console.error('Failed to extract metadata:', error)
+    return { success: false, metadata: { company: '', role: '' } }
+  }
+}
+
+/**
  * Verify content script is active, injecting it if Chrome has not loaded it.
  * @returns {Promise<boolean>} True if content script is active
  */

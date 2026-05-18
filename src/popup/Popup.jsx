@@ -8,6 +8,23 @@ const fields = [
   { id: 'linkedin', label: 'LinkedIn', type: 'url' },
 ]
 
+function ProfileInput({ disabled, field, onChange, value }) {
+  return (
+    <label className="grid gap-1 text-sm font-medium" htmlFor={field.id}>
+      {field.label}
+      <input
+        className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-normal outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        disabled={disabled}
+        id={field.id}
+        name={field.id}
+        onChange={onChange}
+        type={field.type}
+        value={value}
+      />
+    </label>
+  )
+}
+
 function Popup() {
   const [profile, setProfile] = useState(emptyProfile)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
@@ -120,18 +137,13 @@ function Popup() {
         )}
 
         {fields.map((field) => (
-          <label className="grid gap-1 text-sm font-medium" htmlFor={field.id} key={field.id}>
-            {field.label}
-            <input
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-normal outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-              disabled={isLoadingProfile}
-              id={field.id}
-              name={field.id}
-              onChange={handleFieldChange}
-              type={field.type}
-              value={profile[field.id]}
-            />
-          </label>
+          <ProfileInput
+            disabled={isLoadingProfile}
+            field={field}
+            key={field.id}
+            onChange={handleFieldChange}
+            value={profile[field.id]}
+          />
         ))}
 
         <button

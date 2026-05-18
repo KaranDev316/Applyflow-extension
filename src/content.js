@@ -9,6 +9,73 @@ import { getProfileFromStorage } from './utils/storageUtil.js'
 
 console.log('ApplyFlow content script loaded')
 
+const PAGE_READY_DELAY_MS = 250
+
+function logPageState(eventName, extra = {}) {
+  console.log('ApplyFlow:', eventName, {
+    href: window.location.href,
+    readyState: document.readyState,
+    time: Math.round(performance.now()),
+    ...extra,
+  })
+}
+
+function waitForPageReady() {
+  if (document.readyState === 'complete') {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, PAGE_READY_DELAY_MS)
+    })
+  }
+
+  return new Promise((resolve) => {
+    window.addEventListener(
+      'load',
+      () => {
+        window.setTimeout(resolve, PAGE_READY_DELAY_MS)
+      },
+      { once: true },
+    )
+  })
+}
+
+function setNativeFieldValue(field, value) {
+  const prototype = field instanceof HTMLTextAreaElement
+    ? HTMLTextAreaElement.prototype
+    : HTMLInputElement.prototype
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set
+
+  if (valueSetter) {
+    valueSetter.call(field, value)
+  } else {
+    field.value = value
+  }
+
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  field.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function fillFirstField(fieldType, fields, value) {
+  if (!value || fields[fieldType].length === 0) {
+    return 0
+  }
+
+  const field = fields[fieldType][0].element
+
+  if (!field?.isConnected) {
+    logPageState(`Skipped disconnected ${fieldType} field`)
+    return 0
+  }
+
+  logPageState(`Filling ${fieldType} field`, {
+    id: field.id || '',
+    name: field.name || '',
+    type: field.type || field.tagName.toLowerCase(),
+  })
+
+  setNativeFieldValue(field, value)
+  return 1
+}
+
 /**
  * Detect all form fields on the current page
  */
@@ -38,6 +105,8 @@ function handleDetectFields() {
  */
 async function handleAutofill() {
   try {
+    await waitForPageReady()
+
     // Get profile data from storage
     const profile = await getProfileFromStorage()
 
@@ -51,35 +120,9 @@ async function handleAutofill() {
 
     let filledCount = 0
 
-    // Fill name field
-    if (profile.name && fields.name.length > 0) {
-      const nameField = fields.name[0].element
-      nameField.value = profile.name
-      nameField.dispatchEvent(new Event('input', { bubbles: true }))
-      nameField.dispatchEvent(new Event('change', { bubbles: true }))
-      filledCount++
-      console.log('ApplyFlow: Filled name field')
-    }
-
-    // Fill email field
-    if (profile.email && fields.email.length > 0) {
-      const emailField = fields.email[0].element
-      emailField.value = profile.email
-      emailField.dispatchEvent(new Event('input', { bubbles: true }))
-      emailField.dispatchEvent(new Event('change', { bubbles: true }))
-      filledCount++
-      console.log('ApplyFlow: Filled email field')
-    }
-
-    // Fill LinkedIn field
-    if (profile.linkedin && fields.linkedin.length > 0) {
-      const linkedinField = fields.linkedin[0].element
-      linkedinField.value = profile.linkedin
-      linkedinField.dispatchEvent(new Event('input', { bubbles: true }))
-      linkedinField.dispatchEvent(new Event('change', { bubbles: true }))
-      filledCount++
-      console.log('ApplyFlow: Filled LinkedIn field')
-    }
+    filledCount += fillFirstField('name', fields, profile.name)
+    filledCount += fillFirstField('email', fields, profile.email)
+    filledCount += fillFirstField('linkedin', fields, profile.linkedin)
 
     console.log(`ApplyFlow: Autofill completed - filled ${filledCount} fields`)
 
@@ -125,9 +168,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 })
 
 /**
- * Log detected fields on page load
+ * Avoid touching the host page's React-controlled form during its hydration.
+ * Field detection now runs only when the popup explicitly asks for it.
  */
 window.addEventListener('load', () => {
-  console.log('ApplyFlow: Page fully loaded, detecting fields...')
-  handleDetectFields()
+  logPageState('Page fully loaded')
 })

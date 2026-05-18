@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
 import { getPlatformStatus } from '../utils/platformDetection'
-import { triggerAutofillOnPage } from '../utils/messaging'
+import { isContentScriptActive, triggerAutofillOnPage } from '../utils/messaging'
 
 const actions = ['Profile', 'Tracker']
 const fields = [
@@ -231,6 +231,13 @@ function Popup() {
 
     try {
       console.log('Popup: Triggering autofill for platform:', platformStatus.name)
+
+      const contentScriptActive = await isContentScriptActive()
+
+      if (!contentScriptActive) {
+        showAutofillMessage('Refresh the job page, then try again', 'error')
+        return
+      }
 
       // Send autofill action to content script
       const result = await triggerAutofillOnPage()

@@ -20,7 +20,7 @@ export function detectPlatformFromUrl(url) {
   }
 
   // Check each platform's URL pattern
-  for (const [key, platform] of Object.entries(PLATFORMS)) {
+  for (const platform of Object.values(PLATFORMS)) {
     if (platform.urlPattern.test(url)) {
       return {
         platform: platform.id,

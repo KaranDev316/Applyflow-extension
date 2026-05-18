@@ -12,7 +12,7 @@ export async function sendMessageToContentScript(action, data = {}) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
 
-    if (!tab) {
+    if (!tab?.id) {
       throw new Error('No active tab found')
     }
 
@@ -28,6 +28,8 @@ export async function sendMessageToContentScript(action, data = {}) {
             reject(new Error(chrome.runtime.lastError.message))
           } else if (response && response.success === false) {
             reject(new Error(response.error || 'Content script error'))
+          } else if (!response) {
+            reject(new Error('No response from content script'))
           } else {
             resolve(response)
           }
@@ -76,7 +78,7 @@ export async function isContentScriptActive() {
   try {
     const response = await sendMessageToContentScript('ping')
     return response && response.success
-  } catch (error) {
+  } catch {
     return false
   }
 }

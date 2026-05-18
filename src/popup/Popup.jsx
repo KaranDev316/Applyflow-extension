@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
 
 const actions = ['Profile', 'Edit Profile', 'Tracker']
 const fields = [
@@ -6,60 +7,6 @@ const fields = [
   { id: 'email', label: 'Email', type: 'email' },
   { id: 'linkedin', label: 'LinkedIn', type: 'url' },
 ]
-
-const emptyProfile = {
-  name: '',
-  email: '',
-  linkedin: '',
-}
-
-function normalizeProfile(profile = {}) {
-  return {
-    name: profile.name ?? '',
-    email: profile.email ?? '',
-    linkedin: profile.linkedin ?? '',
-  }
-}
-
-function loadProfile() {
-  return new Promise((resolve, reject) => {
-    if (!globalThis.chrome?.storage?.local) {
-      resolve(emptyProfile)
-      return
-    }
-
-    globalThis.chrome.storage.local.get('profile', (result) => {
-      const error = globalThis.chrome.runtime?.lastError
-
-      if (error) {
-        reject(new Error(error.message))
-        return
-      }
-
-      resolve(normalizeProfile(result.profile))
-    })
-  })
-}
-
-function saveProfile(profile) {
-  return new Promise((resolve, reject) => {
-    if (!globalThis.chrome?.storage?.local) {
-      reject(new Error('chrome.storage.local is unavailable'))
-      return
-    }
-
-    globalThis.chrome.storage.local.set({ profile }, () => {
-      const error = globalThis.chrome.runtime?.lastError
-
-      if (error) {
-        reject(new Error(error.message))
-        return
-      }
-
-      resolve()
-    })
-  })
-}
 
 function Popup() {
   const [profile, setProfile] = useState(emptyProfile)
@@ -73,23 +20,26 @@ function Popup() {
   useEffect(() => {
     let isMounted = true
 
-    loadProfile()
-      .then((savedProfile) => {
+    async function loadSavedProfile() {
+      try {
+        const savedProfile = await getProfile()
+
         if (isMounted) {
           setProfile(savedProfile)
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Failed to load profile:', error)
         if (isMounted) {
           setLoadError('Unable to load saved profile')
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoadingProfile(false)
         }
-      })
+      }
+    }
+
+    loadSavedProfile()
 
     return () => {
       isMounted = false

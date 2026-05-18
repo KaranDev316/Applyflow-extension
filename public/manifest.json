@@ -13,7 +13,7 @@
     "https://*.lever.co/*"
   ],
   "background": {
-    "service_worker": "src/background.js",
+    "service_worker": "src/background/index.js",
     "type": "module"
   },
   "content_scripts": [
@@ -24,7 +24,7 @@
         "https://lever.co/*",
         "https://*.lever.co/*"
       ],
-      "js": ["src/content.js"],
+      "js": ["src/content/index.js"],
       "run_at": "document_idle",
       "all_frames": true
     }

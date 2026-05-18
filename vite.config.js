@@ -9,6 +9,16 @@ import { dirname, resolve } from 'path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 function stableJsFileName(chunkInfo) {
+  const moduleId = chunkInfo.facadeModuleId || ''
+
+  if (moduleId.includes('/src/content/')) {
+    return 'assets/content.js'
+  }
+
+  if (moduleId.includes('/src/background/')) {
+    return 'assets/background.js'
+  }
+
   const name = chunkInfo.name.endsWith('.js')
     ? chunkInfo.name.slice(0, -3)
     : chunkInfo.name

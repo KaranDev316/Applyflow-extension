@@ -2,6 +2,8 @@
  * Utility functions for message passing between popup and content scripts
  */
 
+import { MESSAGE_ACTIONS } from '../types/messages'
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
 
@@ -116,7 +118,7 @@ export async function injectContentScriptIntoActiveTab(activeTab) {
  */
 export async function detectFieldsOnPage() {
   try {
-    const response = await sendMessageToContentScript('detectFields')
+    const response = await sendMessageToContentScript(MESSAGE_ACTIONS.DETECT_FIELDS)
     return response
   } catch (error) {
     console.error('Failed to detect fields:', error)
@@ -130,7 +132,7 @@ export async function detectFieldsOnPage() {
  */
 export async function triggerAutofillOnPage() {
   try {
-    const response = await sendMessageToContentScript('autofill')
+    const response = await sendMessageToContentScript(MESSAGE_ACTIONS.AUTOFILL)
     return response
   } catch (error) {
     console.error('Failed to trigger autofill:', error)
@@ -144,7 +146,7 @@ export async function triggerAutofillOnPage() {
  */
 export async function extractMetadataFromPage() {
   try {
-    const response = await sendMessageToContentScript('extractMetadata')
+    const response = await sendMessageToContentScript(MESSAGE_ACTIONS.EXTRACT_METADATA)
     return response
   } catch (error) {
     console.error('Failed to extract metadata:', error)
@@ -158,7 +160,7 @@ export async function extractMetadataFromPage() {
  */
 export async function isContentScriptActive() {
   try {
-    const response = await sendMessageToContentScript('ping')
+    const response = await sendMessageToContentScript(MESSAGE_ACTIONS.PING)
     return response && response.success
   } catch (error) {
     console.warn('ApplyFlow popup: Content script ping failed:', error.message)

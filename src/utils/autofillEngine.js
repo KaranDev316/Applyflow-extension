@@ -209,24 +209,78 @@ export function autofillFromProfile(profile, fields) {
  * @param {object} profile     – Saved profile data
  * @returns {number} Number of selects filled
  */
+function getAssociatedLabelText(element) {
+  if (element.id) {
+    const label = document.querySelector(`label[for="${element.id}"]`)
+    if (label) return label.textContent.trim()
+  }
+
+  const parentLabel = element.closest('label')
+  if (parentLabel) return parentLabel.textContent.trim()
+
+  return ''
+}
+
+function selectOptionMatchesText(optionText, needle) {
+  return optionText.toLowerCase().trim() === needle.toLowerCase().trim()
+}
+
+function selectHasExactProfileValue(element, profile) {
+  const candidates = Object.values(profile)
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map((value) => String(value).trim().toLowerCase())
+
+  for (const option of element.options) {
+    const optionValue = String(option.value || option.textContent || '').trim().toLowerCase()
+    if (candidates.includes(optionValue)) {
+      return optionValue
+    }
+  }
+
+  return null
+}
+
 export function autofillSelects(selectFields, profile) {
   let filled = 0
 
   for (const sel of selectFields) {
-    const text = [sel.name, sel.id, sel.element.getAttribute('aria-label') || '']
+    const text = [sel.name, sel.id, sel.element.getAttribute('aria-label') || '', getAssociatedLabelText(sel.element)]
       .join(' ')
       .toLowerCase()
-
-    // Try to match common select fields to profile data
-    let value = null
 
     if (text.includes('phone') && profile.phone) {
       // Phone country-code selects — skip, handled by phone input
       continue
     }
 
-    if (value && fillField(sel.element, value)) {
+    const matchingValue = selectHasExactProfileValue(sel.element, profile)
+
+    if (matchingValue && fillField(sel.element, matchingValue)) {
       filled += 1
+      continue
+    }
+
+    const contactMode = text.includes('contact') || text.includes('preferred method')
+    if (contactMode && profile.email) {
+      if (fillField(sel.element, 'Email')) {
+        filled += 1
+        continue
+      }
+      if (fillField(sel.element, 'email')) {
+        filled += 1
+        continue
+      }
+    }
+
+    if (contactMode && profile.phone) {
+      if (fillField(sel.element, 'Phone')) {
+        filled += 1
+        continue
+      }
+      if (fillField(sel.element, 'phone')) {
+        filled += 1
+        continue
+      }
     }
   }
 

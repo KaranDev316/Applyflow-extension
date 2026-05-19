@@ -1,3 +1,5 @@
+import { useCallback, useState } from 'react'
+
 function formatDate(isoString) {
   if (!isoString) return ''
   const date = new Date(isoString)
@@ -6,6 +8,35 @@ function formatDate(isoString) {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function isToday(isoString) {
+  if (!isoString) return false
+  const date = new Date(isoString)
+  const now = new Date()
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  )
+}
+
+function TrackerMetrics({ applications }) {
+  const total = applications.length
+  const today = applications.filter((app) => isToday(app.appliedAt)).length
+
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+        <p className="text-lg font-semibold text-slate-800">{total}</p>
+        <p className="text-xs text-slate-500">Total</p>
+      </div>
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+        <p className="text-lg font-semibold text-emerald-600">{today}</p>
+        <p className="text-xs text-slate-500">Today</p>
+      </div>
+    </div>
+  )
 }
 
 function EmptyState() {
@@ -23,6 +54,18 @@ function EmptyState() {
 }
 
 function ApplicationItem({ application, onDelete }) {
+  const [confirming, setConfirming] = useState(false)
+
+  const handleDeleteClick = useCallback(() => {
+    if (confirming) {
+      onDelete(application.id)
+    } else {
+      setConfirming(true)
+      // Auto-cancel after 3 seconds
+      setTimeout(() => setConfirming(false), 3000)
+    }
+  }, [confirming, application.id, onDelete])
+
   return (
     <div className="group flex items-start gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -53,20 +96,16 @@ function ApplicationItem({ application, onDelete }) {
         </div>
       </div>
       <button
-        aria-label="Delete application"
-        className="mt-0.5 shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 focus:opacity-100"
-        onClick={() => onDelete(application.id)}
+        aria-label={confirming ? 'Confirm delete' : 'Delete application'}
+        className={`mt-0.5 shrink-0 rounded px-1 py-0.5 text-xs font-medium transition-all ${
+          confirming
+            ? 'bg-red-50 text-red-600 opacity-100 hover:bg-red-100'
+            : 'text-slate-300 opacity-0 hover:text-red-500 group-hover:opacity-100 focus:opacity-100'
+        }`}
+        onClick={handleDeleteClick}
         type="button"
       >
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {confirming ? 'Sure?' : '✕'}
       </button>
     </div>
   )
@@ -86,17 +125,17 @@ function ApplicationList({ applications, error, isLoading, onDelete }) {
   }
 
   return (
-    <div className="grid gap-1.5">
-      <p className="text-xs font-medium text-slate-400">
-        {applications.length} application{applications.length !== 1 ? 's' : ''}
-      </p>
-      {applications.map((app) => (
-        <ApplicationItem
-          application={app}
-          key={app.id}
-          onDelete={onDelete}
-        />
-      ))}
+    <div className="grid gap-2.5">
+      <TrackerMetrics applications={applications} />
+      <div className="grid gap-1.5">
+        {applications.map((app) => (
+          <ApplicationItem
+            application={app}
+            key={app.id}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
     </div>
   )
 }

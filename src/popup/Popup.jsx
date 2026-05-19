@@ -1,22 +1,30 @@
+import { useState } from 'react'
+import ApplicationList from '../components/ApplicationList'
 import JobMetadata from '../components/JobMetadata'
 import PlatformStatus from '../components/PlatformStatus'
 import ProfileForm from '../components/ProfileForm'
 import SmartAutofill from '../components/SmartAutofill'
+import { useApplicationHistory } from '../hooks/useApplicationHistory'
 import { useAutofill } from '../hooks/useAutofill'
 import { useAutofillStats } from '../hooks/useAutofillStats'
 import { usePlatformDetection } from '../hooks/usePlatformDetection'
 import { useProfile } from '../hooks/useProfile'
 
-const actions = ['Profile', 'Tracker']
+const TABS = ['Profile', 'Tracker']
 
 function Popup() {
+  const [activeTab, setActiveTab] = useState('Profile')
   const profileState = useProfile()
   const platformState = usePlatformDetection()
   const { autofillStatsData, refreshStats } = useAutofillStats()
+  const historyState = useApplicationHistory()
   const autofillState = useAutofill({
     isPlatformSupported: platformState.isPlatformSupported,
     onMetadata: platformState.setJobMetadata,
-    onSuccess: refreshStats,
+    onSuccess: async () => {
+      await refreshStats()
+      await historyState.refresh()
+    },
     platformName: platformState.platformStatus?.name,
   })
 
@@ -59,28 +67,44 @@ function Popup() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-1.5">
-        {actions.map((action) => (
+        {TABS.map((tab) => (
           <button
-            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-            key={action}
+            className={`rounded-md border px-2 py-1.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200 ${
+              activeTab === tab
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white'
+            }`}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
             type="button"
           >
-            {action}
+            {tab}
           </button>
         ))}
       </div>
 
-      <ProfileForm
-        isLoading={profileState.isLoadingProfile}
-        isSaved={profileState.isSaved}
-        isSaving={profileState.isSaving}
-        loadError={profileState.loadError}
-        onFieldChange={profileState.handleFieldChange}
-        onSubmit={profileState.handleSubmit}
-        profile={profileState.profile}
-        saveError={profileState.saveError}
-        validationErrors={profileState.validationErrors}
-      />
+      {activeTab === 'Profile' && (
+        <ProfileForm
+          isLoading={profileState.isLoadingProfile}
+          isSaved={profileState.isSaved}
+          isSaving={profileState.isSaving}
+          loadError={profileState.loadError}
+          onFieldChange={profileState.handleFieldChange}
+          onSubmit={profileState.handleSubmit}
+          profile={profileState.profile}
+          saveError={profileState.saveError}
+          validationErrors={profileState.validationErrors}
+        />
+      )}
+
+      {activeTab === 'Tracker' && (
+        <ApplicationList
+          applications={historyState.applications}
+          error={historyState.error}
+          isLoading={historyState.isLoading}
+          onDelete={historyState.removeApplication}
+        />
+      )}
     </main>
   )
 }

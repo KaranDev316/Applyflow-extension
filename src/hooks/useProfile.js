@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { emptyProfile, getProfile, saveProfile } from '../utils/profileStorage'
+import {
+  emptyProfile,
+  getProfile,
+  saveProfile,
+  validateProfile,
+} from '../utils/profileStorage'
 
 export function useProfile() {
   const [profile, setProfile] = useState(emptyProfile)
@@ -8,6 +13,7 @@ export function useProfile() {
   const [isSaving, setIsSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [validationErrors, setValidationErrors] = useState({})
   const savedMessageTimeoutRef = useRef(null)
 
   useEffect(() => {
@@ -45,6 +51,10 @@ export function useProfile() {
 
     setIsSaved(false)
     setSaveError('')
+    setValidationErrors((currentErrors) => ({
+      ...currentErrors,
+      [name]: '',
+    }))
 
     setProfile((currentProfile) => ({
       ...currentProfile,
@@ -70,10 +80,22 @@ export function useProfile() {
     console.log('Profile form values:', profile)
 
     try {
+      const errors = validateProfile(profile)
+
+      if (Object.keys(errors).length > 0) {
+        setValidationErrors(errors)
+        return
+      }
+
+      setValidationErrors({})
       await saveProfile(profile)
       showSavedMessage()
     } catch (error) {
       console.error('Failed to save profile:', error)
+      if (error.validationErrors) {
+        setValidationErrors(error.validationErrors)
+        return
+      }
       setSaveError('Unable to save profile')
     } finally {
       setIsSaving(false)
@@ -89,5 +111,6 @@ export function useProfile() {
     loadError,
     profile,
     saveError,
+    validationErrors,
   }
 }

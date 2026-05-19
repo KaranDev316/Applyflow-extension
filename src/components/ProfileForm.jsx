@@ -16,6 +16,7 @@ function ProfileForm({
   onSubmit,
   profile,
   saveError,
+  validationErrors = {},
 }) {
   return (
     <form className="grid gap-2.5" onSubmit={onSubmit}>
@@ -29,6 +30,7 @@ function ProfileForm({
       {fields.map((field) => (
         <ProfileInput
           disabled={isLoading}
+          error={validationErrors[field.id]}
           field={field}
           key={field.id}
           onChange={onFieldChange}

@@ -79,6 +79,7 @@ function Popup() {
         onSubmit={profileState.handleSubmit}
         profile={profileState.profile}
         saveError={profileState.saveError}
+        validationErrors={profileState.validationErrors}
       />
     </main>
   )

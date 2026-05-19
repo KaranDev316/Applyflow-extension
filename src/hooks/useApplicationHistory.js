@@ -50,10 +50,17 @@ export function useApplicationHistory() {
 
   const removeApplication = useCallback(async (id) => {
     try {
-      await deleteApplicationRecord(id)
-      setApplications((prev) => prev.filter((app) => app.id !== id))
+      const removed = await deleteApplicationRecord(id)
+      if (removed) {
+        setApplications((prev) => prev.filter((app) => app.id !== id))
+      } else {
+        // Record not found in storage — remove from local state anyway
+        setApplications((prev) => prev.filter((app) => app.id !== id))
+        console.warn('Application record not found in storage:', id)
+      }
     } catch (err) {
       console.error('Failed to delete application record:', err)
+      setError('Failed to delete application')
     }
   }, [])
 

@@ -92,13 +92,34 @@ function writeHistory(history) {
  * @param {Partial<ApplicationRecord>} data
  * @returns {ApplicationRecord}
  */
+/**
+ * Check whether a value is a non-null object (not an array).
+ */
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * Validate that a record has the minimum required shape (an id and at least
+ * one meaningful field).  Malformed entries are filtered out on read.
+ */
+function isValidRecord(record) {
+  if (!isPlainObject(record)) return false
+  if (typeof record.id !== 'string' || record.id.length === 0) return false
+  return true
+}
+
 function normalizeRecord(data = {}) {
+  const appliedAt = data.appliedAt && !isNaN(Date.parse(data.appliedAt))
+    ? data.appliedAt
+    : new Date().toISOString()
+
   return {
-    id: data.id || generateId(),
-    company: (data.company || '').trim(),
-    role: (data.role || '').trim(),
-    url: (data.url || '').trim(),
-    appliedAt: data.appliedAt || new Date().toISOString(),
+    id: typeof data.id === 'string' && data.id.length > 0 ? data.id : generateId(),
+    company: (typeof data.company === 'string' ? data.company : '').trim(),
+    role: (typeof data.role === 'string' ? data.role : '').trim(),
+    url: (typeof data.url === 'string' ? data.url : '').trim(),
+    appliedAt,
   }
 }
 
@@ -123,9 +144,10 @@ function isDuplicate(history, url) {
   const cutoff = Date.now() - DUPLICATE_WINDOW_MS
 
   return history.some((record) => {
-    if (record.url.trim().toLowerCase() !== normalizedUrl) return false
-    const recordTime = new Date(record.appliedAt).getTime()
-    return recordTime >= cutoff
+    const recordUrl = typeof record.url === 'string' ? record.url.trim().toLowerCase() : ''
+    if (recordUrl !== normalizedUrl) return false
+    const recordTime = Date.parse(record.appliedAt)
+    return !isNaN(recordTime) && recordTime >= cutoff
   })
 }
 
@@ -139,9 +161,15 @@ function isDuplicate(history, url) {
  * @returns {Promise<ApplicationRecord[]>}
  */
 export async function getApplicationHistory() {
-  const history = await readHistory()
+  const raw = await readHistory()
+
+  // Filter out malformed entries, normalise the rest
+  const history = raw
+    .filter(isValidRecord)
+    .map(normalizeRecord)
+
   // Sort descending by appliedAt so newest entries appear first
-  return history.sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''))
+  return history.sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))
 }
 
 /**

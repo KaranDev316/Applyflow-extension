@@ -103,6 +103,33 @@ function normalizeRecord(data = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Duplicate detection
+// ---------------------------------------------------------------------------
+
+/** Time window (ms) within which the same URL is considered a duplicate. */
+const DUPLICATE_WINDOW_MS = 60_000 // 1 minute
+
+/**
+ * Check whether a record with the same URL was already saved recently.
+ *
+ * @param {Array} history - Existing history array
+ * @param {string} url    - URL to check
+ * @returns {boolean}
+ */
+function isDuplicate(history, url) {
+  if (!url) return false
+
+  const normalizedUrl = url.trim().toLowerCase()
+  const cutoff = Date.now() - DUPLICATE_WINDOW_MS
+
+  return history.some((record) => {
+    if (record.url.trim().toLowerCase() !== normalizedUrl) return false
+    const recordTime = new Date(record.appliedAt).getTime()
+    return recordTime >= cutoff
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -127,9 +154,16 @@ export async function addApplicationRecord(data) {
   const record = normalizeRecord(data)
   const history = await readHistory()
 
+  // Prevent duplicate entries for the same URL within a short timeframe
+  if (isDuplicate(history, record.url)) {
+    console.log('ApplyFlow: Skipping duplicate application record', { url: record.url })
+    return null
+  }
+
   history.push(record)
   await writeHistory(history)
 
+  console.log('ApplyFlow: Saved application record', record)
   return record
 }
 

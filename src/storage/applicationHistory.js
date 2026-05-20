@@ -114,12 +114,17 @@ function normalizeRecord(data = {}) {
     ? data.appliedAt
     : new Date().toISOString()
 
+  // Maintain backward compatibility: if no explicit `status` is provided,
+  // treat legacy records as `applied` (they were created as applied historically).
+  const status = typeof data.status === 'string' ? data.status : 'applied'
+
   return {
     id: typeof data.id === 'string' && data.id.length > 0 ? data.id : generateId(),
     company: (typeof data.company === 'string' ? data.company : '').trim(),
     role: (typeof data.role === 'string' ? data.role : '').trim(),
     url: (typeof data.url === 'string' ? data.url : '').trim(),
     appliedAt,
+    status,
   }
 }
 
@@ -193,6 +198,116 @@ export async function addApplicationRecord(data) {
 
   console.log('ApplyFlow: Saved application record', record)
   return record
+}
+
+/**
+ * Find the index of a record matching company+role+url (case-insensitive).
+ * Returns -1 if not found.
+ */
+function findMatchingIndex(history, { company, role, url }) {
+  const c = (company || '').trim().toLowerCase()
+  const r = (role || '').trim().toLowerCase()
+  const u = (url || '').trim().toLowerCase()
+
+  return history.findIndex((rec) => {
+    const rc = (rec.company || '').trim().toLowerCase()
+    const rr = (rec.role || '').trim().toLowerCase()
+    const ru = (rec.url || '').trim().toLowerCase()
+
+    return rc === c && rr === r && ru === u
+  })
+}
+
+/**
+ * Save or update a draft application record. If a matching record exists,
+ * upgrade its status to `draft` and return it. Otherwise create a new draft.
+ * Returns the saved/updated record.
+ */
+export async function saveDraftApplication(data) {
+  const history = await readHistory()
+  const idx = findMatchingIndex(history, data)
+
+  if (idx !== -1) {
+    // Update existing record to draft unless it's already applied
+    const existing = normalizeRecord(history[idx])
+    if (existing.status === 'applied') {
+      console.log('ApplyFlow: Existing record already applied; skipping draft update', { id: existing.id })
+      return existing
+    }
+
+    const updated = {
+      ...existing,
+      company: (data.company || existing.company).trim(),
+      role: (data.role || existing.role).trim(),
+      url: (data.url || existing.url).trim(),
+      status: 'draft',
+      appliedAt: existing.appliedAt || new Date().toISOString(),
+    }
+
+    history[idx] = updated
+    await writeHistory(history)
+    console.log('ApplyFlow: Updated draft application record', updated)
+    return updated
+  }
+
+  // Create new draft record
+  const rec = normalizeRecord({
+    ...data,
+    status: 'draft',
+    appliedAt: new Date().toISOString(),
+  })
+
+  history.push(rec)
+  await writeHistory(history)
+  console.log('ApplyFlow: Created draft application record', rec)
+  return rec
+}
+
+/**
+ * Mark an application as applied. If a matching draft exists, upgrade it.
+ * Prevents duplicates by matching company+role+url.
+ * Returns the applied record (new or updated).
+ */
+export async function markApplicationAsApplied(data) {
+  const history = await readHistory()
+  const idx = findMatchingIndex(history, data)
+  const now = new Date().toISOString()
+
+  if (idx !== -1) {
+    const existing = normalizeRecord(history[idx])
+    if (existing.status === 'applied') {
+      console.log('ApplyFlow: Duplicate applied prevented', { id: existing.id })
+      return existing
+    }
+
+    const updated = {
+      ...existing,
+      status: 'applied',
+      appliedAt: now,
+    }
+
+    history[idx] = updated
+    await writeHistory(history)
+    console.log('ApplyFlow: Upgraded draft -> applied', updated)
+    return updated
+  }
+
+  // No existing record — create applied record
+  const rec = normalizeRecord({
+    ...data,
+    status: 'applied',
+    appliedAt: now,
+  })
+
+  if (isDuplicate(history, rec.url)) {
+    console.log('ApplyFlow: Skipping duplicate applied record', { url: rec.url })
+    return null
+  }
+
+  history.push(rec)
+  await writeHistory(history)
+  console.log('ApplyFlow: Created applied application record', rec)
+  return rec
 }
 
 /**

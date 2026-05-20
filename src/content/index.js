@@ -4,6 +4,7 @@ import {
   handleExtractMetadata,
 } from './handlers.js'
 import { logPageState, markContentScriptLoaded } from './lifecycle.js'
+import startSubmissionDetection from './submissionDetection.js'
 import { MESSAGE_ACTIONS } from '../types/messages.js'
 
 const wasContentScriptLoaded = markContentScriptLoaded()
@@ -38,4 +39,10 @@ if (!wasContentScriptLoaded) {
 
 window.addEventListener('load', () => {
   logPageState('Page fully loaded')
+  try {
+    // Start monitoring for successful submissions so drafts can be upgraded.
+    startSubmissionDetection()
+  } catch (err) {
+    console.warn('ApplyFlow: Failed to start submission detection', err)
+  }
 })

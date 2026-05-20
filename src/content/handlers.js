@@ -7,7 +7,7 @@ import { detectFormFields, formatFieldsForLogging } from '../utils/fieldDetectio
 import { extractPageMetadata } from '../utils/metadataExtractor.js'
 import { recordAutofillRun } from '../utils/autofillStats.js'
 import { getProfileFromStorage } from '../utils/storageUtil.js'
-import { addApplicationRecord } from '../storage/applicationHistory.js'
+import { saveDraftApplication } from '../storage/applicationHistory.js'
 import { logPageState } from './lifecycle.js'
 import {
   detectFieldsWhenReady,
@@ -103,15 +103,24 @@ export async function handleAutofill() {
       console.warn('ApplyFlow: Failed to record autofill stats', err)
     })
 
-    // Save application record to tracker history
-    if (totalFilled > 0) {
-      await addApplicationRecord({
-        company: metadata.company,
-        role: metadata.role,
-        url: window.location.href,
-      }).catch((err) => {
-        console.warn('ApplyFlow: Failed to save application record', err)
-      })
+    // Save or update a DRAFT record after autofill. Do NOT mark as applied.
+    // We create a draft when autofill produced fields or when metadata exists
+    // so the user can review and submit. The submission detection will
+    // upgrade the draft to `applied` when a successful submission is observed.
+    try {
+      const shouldDraft = totalFilled > 0 || (metadata && (metadata.company || metadata.role))
+      if (shouldDraft) {
+        const draft = await saveDraftApplication({
+          company: metadata.company,
+          role: metadata.role,
+          url: window.location.href,
+        })
+        if (draft) {
+          console.log('ApplyFlow: Draft saved after autofill', { id: draft.id })
+        }
+      }
+    } catch (err) {
+      console.warn('ApplyFlow: Failed to save draft application record', err)
     }
 
     return {

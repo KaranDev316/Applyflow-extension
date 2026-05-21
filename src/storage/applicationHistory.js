@@ -128,6 +128,52 @@ function normalizeRecord(data = {}) {
   }
 }
 
+function getRecordKey(record) {
+  const company = (record.company || '').trim().toLowerCase()
+  const role = (record.role || '').trim().toLowerCase()
+  const url = (record.url || '').trim().toLowerCase()
+  return `${company}||${role}||${url}`
+}
+
+function chooseBestRecord(first, second) {
+  if (first.status === second.status) {
+    return first.appliedAt >= second.appliedAt ? first : second
+  }
+
+  if (first.status === 'applied') return first
+  if (second.status === 'applied') return second
+
+  return first.appliedAt >= second.appliedAt ? first : second
+}
+
+function dedupeHistory(history) {
+  const grouped = new Map()
+
+  for (const record of history) {
+    const key = getRecordKey(record)
+    if (!grouped.has(key)) {
+      grouped.set(key, record)
+      continue
+    }
+
+    grouped.set(key, chooseBestRecord(grouped.get(key), record))
+  }
+
+  return Array.from(grouped.values())
+}
+
+async function readNormalizedHistory() {
+  const rawHistory = await readHistory()
+  const normalizedHistory = rawHistory.filter(isValidRecord).map(normalizeRecord)
+  const cleanedHistory = dedupeHistory(normalizedHistory).sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))
+
+  if (cleanedHistory.length !== normalizedHistory.length) {
+    await writeHistory(cleanedHistory)
+  }
+
+  return cleanedHistory
+}
+
 // ---------------------------------------------------------------------------
 // Duplicate detection
 // ---------------------------------------------------------------------------
@@ -166,15 +212,7 @@ function isDuplicate(history, url) {
  * @returns {Promise<ApplicationRecord[]>}
  */
 export async function getApplicationHistory() {
-  const raw = await readHistory()
-
-  // Filter out malformed entries, normalise the rest
-  const history = raw
-    .filter(isValidRecord)
-    .map(normalizeRecord)
-
-  // Sort descending by appliedAt so newest entries appear first
-  return history.sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))
+  return readNormalizedHistory()
 }
 
 /**
@@ -185,7 +223,7 @@ export async function getApplicationHistory() {
  */
 export async function addApplicationRecord(data) {
   const record = normalizeRecord(data)
-  const history = await readHistory()
+  const history = await readNormalizedHistory()
 
   // Prevent duplicate entries for the same URL within a short timeframe
   if (isDuplicate(history, record.url)) {
@@ -218,13 +256,31 @@ function findMatchingIndex(history, { company, role, url }) {
   })
 }
 
+function findDraftIndexByUrl(history, url) {
+  const normalizedUrl = (url || '').trim().toLowerCase()
+  let bestIndex = -1
+  let bestAppliedAt = ''
+
+  history.forEach((rec, idx) => {
+    if (rec?.status !== 'draft') return
+    if ((rec.url || '').trim().toLowerCase() !== normalizedUrl) return
+
+    if (bestIndex === -1 || rec.appliedAt > bestAppliedAt) {
+      bestIndex = idx
+      bestAppliedAt = rec.appliedAt
+    }
+  })
+
+  return bestIndex
+}
+
 /**
  * Save or update a draft application record. If a matching record exists,
  * upgrade its status to `draft` and return it. Otherwise create a new draft.
  * Returns the saved/updated record.
  */
 export async function saveDraftApplication(data) {
-  const history = await readHistory()
+  const history = await readNormalizedHistory()
   const idx = findMatchingIndex(history, data)
 
   if (idx !== -1) {
@@ -269,7 +325,7 @@ export async function saveDraftApplication(data) {
  * Returns the applied record (new or updated).
  */
 export async function markApplicationAsApplied(data) {
-  const history = await readHistory()
+  const history = await readNormalizedHistory()
   const idx = findMatchingIndex(history, data)
   const now = new Date().toISOString()
 
@@ -289,6 +345,21 @@ export async function markApplicationAsApplied(data) {
     history[idx] = updated
     await writeHistory(history)
     console.log('ApplyFlow: Upgraded draft -> applied', updated)
+    return updated
+  }
+
+  const urlFallbackIdx = findDraftIndexByUrl(history, data.url)
+  if (urlFallbackIdx !== -1) {
+    const existing = normalizeRecord(history[urlFallbackIdx])
+    const updated = {
+      ...existing,
+      status: 'applied',
+      appliedAt: now,
+    }
+
+    history[urlFallbackIdx] = updated
+    await writeHistory(history)
+    console.log('ApplyFlow: Upgraded draft -> applied by URL fallback', updated)
     return updated
   }
 
@@ -317,7 +388,7 @@ export async function markApplicationAsApplied(data) {
  * @returns {Promise<boolean>} `true` if a record was removed, `false` if not found
  */
 export async function deleteApplicationRecord(id) {
-  const history = await readHistory()
+  const history = await readNormalizedHistory()
   const index = history.findIndex((record) => record.id === id)
 
   if (index === -1) return false

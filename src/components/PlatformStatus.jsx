@@ -30,8 +30,8 @@ function PlatformStatus({ status, isDetecting }) {
   }
 
   return (
-    <div className={`rounded-md border ${borderColor} ${bgColor} px-3 py-2`}>
-      <p className={`text-sm font-medium ${textColor}`}>{status.message}</p>
+    <div className={`rounded-full border ${borderColor} ${bgColor} px-3 py-2 text-sm leading-5`}>
+      <p className={`font-medium ${textColor}`}>{status.message}</p>
     </div>
   )
 }

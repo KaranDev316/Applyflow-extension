@@ -10,6 +10,45 @@ function formatDate(isoString) {
   })
 }
 
+function getStatus(record) {
+  return typeof record.status === 'string' ? record.status : 'applied'
+}
+
+function getRecordKey(record) {
+  const company = (record.company || '').trim().toLowerCase()
+  const role = (record.role || '').trim().toLowerCase()
+  const url = (record.url || '').trim().toLowerCase()
+  return `${company}||${role}||${url}`
+}
+
+function chooseBestRecord(first, second) {
+  const firstStatus = getStatus(first)
+  const secondStatus = getStatus(second)
+
+  if (firstStatus === secondStatus) {
+    return first.appliedAt >= second.appliedAt ? first : second
+  }
+  if (firstStatus === 'applied') return first
+  if (secondStatus === 'applied') return second
+  return first.appliedAt >= second.appliedAt ? first : second
+}
+
+function dedupeApplications(applications = []) {
+  const grouped = new Map()
+
+  for (const application of applications) {
+    if (!application || typeof application !== 'object') continue
+    const key = getRecordKey(application)
+    if (!grouped.has(key)) {
+      grouped.set(key, application)
+      continue
+    }
+    grouped.set(key, chooseBestRecord(grouped.get(key), application))
+  }
+
+  return Array.from(grouped.values())
+}
+
 function isToday(isoString) {
   if (!isoString) return false
   const date = new Date(isoString)
@@ -22,11 +61,14 @@ function isToday(isoString) {
 }
 
 function TrackerMetrics({ applications }) {
-  const total = applications.length
-  const today = applications.filter((app) => isToday(app.appliedAt)).length
+  const unique = dedupeApplications(applications)
+  const applied = unique.filter((app) => getStatus(app) === 'applied')
+  const drafts = unique.filter((app) => getStatus(app) === 'draft').length
+  const total = applied.length
+  const today = applied.filter((app) => isToday(app.appliedAt)).length
 
   return (
-    <div className="grid grid-cols-2 gap-1.5">
+    <div className="grid grid-cols-3 gap-1.5">
       <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center">
         <p className="text-lg font-semibold text-slate-800">{total}</p>
         <p className="text-xs text-slate-500">Total</p>
@@ -34,6 +76,10 @@ function TrackerMetrics({ applications }) {
       <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center">
         <p className="text-lg font-semibold text-emerald-600">{today}</p>
         <p className="text-xs text-slate-500">Today</p>
+      </div>
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+        <p className="text-lg font-semibold text-amber-600">{drafts}</p>
+        <p className="text-xs text-slate-500">Drafts</p>
       </div>
     </div>
   )
@@ -75,7 +121,7 @@ function ApplicationItem({ application, onDelete }) {
         <p className="truncate text-xs text-slate-500">
           {application.company || 'Unknown Company'}
         </p>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-400">
             {formatDate(application.appliedAt)}
           </span>
@@ -93,6 +139,15 @@ function ApplicationItem({ application, onDelete }) {
               </a>
             </>
           )}
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              application.status === 'applied'
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {application.status === 'applied' ? 'Applied' : 'Draft'}
+          </span>
         </div>
       </div>
       <button
@@ -111,7 +166,7 @@ function ApplicationItem({ application, onDelete }) {
   )
 }
 
-function ApplicationList({ applications, error, isLoading, onDelete }) {
+function ApplicationList({ applications, error, isLoading, onDelete, statusFilter = 'all' }) {
   if (isLoading) {
     return <p className="py-4 text-center text-sm text-slate-500">Loading...</p>
   }
@@ -120,24 +175,50 @@ function ApplicationList({ applications, error, isLoading, onDelete }) {
     return <p className="py-4 text-center text-sm font-medium text-red-600">{error}</p>
   }
 
-  if (applications.length === 0) {
+  const normalizedApplications = dedupeApplications(applications)
+  const appliedApplications = normalizedApplications.filter((app) => getStatus(app) === 'applied')
+  const draftApplications = normalizedApplications.filter((app) => getStatus(app) === 'draft')
+  const filteredAppliedApplications = statusFilter === 'all' || statusFilter === 'applied' ? appliedApplications : []
+  const filteredDraftApplications = statusFilter === 'all' || statusFilter === 'draft' ? draftApplications : []
+  const visibleApplications = [...filteredDraftApplications, ...filteredAppliedApplications]
+
+  if (visibleApplications.length === 0) {
     return <EmptyState />
   }
 
   return (
     <div className="grid gap-2.5">
-      <TrackerMetrics applications={applications} />
-      <div className="grid gap-1.5">
-        {applications.map((app) => (
-          <ApplicationItem
-            application={app}
-            key={app.id}
-            onDelete={onDelete}
-          />
-        ))}
+      <TrackerMetrics applications={normalizedApplications} />
+      <div className="space-y-4">
+        {filteredDraftApplications.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Draft applications
+            </h2>
+            <div className="grid gap-1.5">
+              {filteredDraftApplications.map((app) => (
+                <ApplicationItem key={app.id} application={app} onDelete={onDelete} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {filteredAppliedApplications.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Applied applications
+            </h2>
+            <div className="grid gap-1.5">
+              {filteredAppliedApplications.map((app) => (
+                <ApplicationItem key={app.id} application={app} onDelete={onDelete} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )
 }
 
+export { ApplicationItem, TrackerMetrics }
 export default ApplicationList

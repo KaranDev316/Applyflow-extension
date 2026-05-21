@@ -48,6 +48,24 @@ export function useApplicationHistory() {
     }
   }, [])
 
+  useEffect(() => {
+    const listener = (changes, area) => {
+      if (area === 'local' && changes.applicationHistory) {
+        refresh()
+      }
+    }
+
+    if (globalThis.chrome?.storage?.onChanged?.addListener) {
+      globalThis.chrome.storage.onChanged.addListener(listener)
+    }
+
+    return () => {
+      if (globalThis.chrome?.storage?.onChanged?.removeListener) {
+        globalThis.chrome.storage.onChanged.removeListener(listener)
+      }
+    }
+  }, [refresh])
+
   const removeApplication = useCallback(async (id) => {
     try {
       const removed = await deleteApplicationRecord(id)

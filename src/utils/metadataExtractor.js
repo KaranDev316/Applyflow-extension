@@ -70,6 +70,12 @@ function extractGenericMetadata() {
   const ogTitle = metaContent('og:title')
   const ogSiteName = metaContent('og:site_name')
   const pageTitle = document.title || ''
+  const lowerTitle = pageTitle.toLowerCase()
+
+  const isConfirmationPage = /thank you|thanks|application submitted|submission received|your application/i.test(lowerTitle)
+  if (isConfirmationPage) {
+    return { company: '', role: '' }
+  }
 
   // Many ATS pages follow "Role at Company" or "Role - Company" patterns
   let company = ogSiteName
@@ -101,6 +107,15 @@ function extractGenericMetadata() {
  */
 export function extractPageMetadata() {
   const url = window.location.href.toLowerCase()
+
+  const pageContent = `${document.title || ''} ${document.body?.textContent || ''}`
+  const isConfirmationPage = /thank you|thanks|application submitted|submission received|your application has been received/i.test(
+    pageContent.toLowerCase(),
+  )
+
+  if (isConfirmationPage) {
+    return { company: '', role: '' }
+  }
 
   let meta = { company: '', role: '' }
 

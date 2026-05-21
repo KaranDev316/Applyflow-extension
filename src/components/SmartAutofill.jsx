@@ -1,19 +1,18 @@
-import AutofillStatsDisplay from './AutofillStatsDisplay'
-
-function SmartAutofill({ disabled, isLoading, message, onAutofill, status, stats }) {
+function SmartAutofill({ disabled, isLoading, message, onAutofill, status }) {
   let buttonClasses =
-    'rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed'
+    'rounded-full px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed'
   const messageClasses = 'text-center text-sm font-medium'
+  const helperClasses = 'text-center text-xs text-slate-400'
   let messageBgColor = ''
 
   if (status === 'success') {
-    buttonClasses += ' bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-600 disabled:bg-emerald-400'
+    buttonClasses += ' bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-600 disabled:bg-emerald-600 disabled:opacity-80'
     messageBgColor = 'text-emerald-600'
   } else if (status === 'error') {
     messageBgColor = 'text-red-600'
-    buttonClasses += ' bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-900 disabled:bg-slate-400'
+    buttonClasses += ' bg-slate-950 text-white hover:bg-slate-900 focus:ring-slate-900 disabled:bg-slate-950 disabled:opacity-80'
   } else {
-    buttonClasses += ' bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-900 disabled:bg-slate-400'
+    buttonClasses += ' bg-slate-950 text-white hover:bg-slate-900 focus:ring-slate-900 disabled:bg-slate-950 disabled:opacity-80'
   }
 
   return (
@@ -24,11 +23,14 @@ function SmartAutofill({ disabled, isLoading, message, onAutofill, status, stats
         onClick={onAutofill}
         type="button"
       >
-        {isLoading ? 'Autofilling...' : 'Smart Autofill'}
+        {isLoading ? 'Autofilling...' : 'Autofill current job'}
       </button>
 
-      {message && <p className={`${messageClasses} ${messageBgColor}`}>{message}</p>}
-      <AutofillStatsDisplay stats={stats} />
+      {message ? (
+        <p className={`${messageClasses} ${messageBgColor}`}>{message}</p>
+      ) : disabled ? (
+        <p className={helperClasses}>Autofill available on supported job boards</p>
+      ) : null}
     </div>
   )
 }

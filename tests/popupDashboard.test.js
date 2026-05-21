@@ -19,7 +19,33 @@ test('computeMetrics returns correct total and today counts', () => {
 })
 
 test('computeMetrics handles empty or malformed inputs', () => {
-  assert.deepEqual(computeMetrics(null), { total: 0, today: 0 })
-  assert.deepEqual(computeMetrics([]), { total: 0, today: 0 })
-  assert.deepEqual(computeMetrics([{}, { appliedAt: null }]), { total: 2, today: 0 })
+  assert.deepEqual(computeMetrics(null), { total: 0, today: 0, drafts: 0 })
+  assert.deepEqual(computeMetrics([]), { total: 0, today: 0, drafts: 0 })
+  assert.deepEqual(computeMetrics([{}, { appliedAt: null }]), { total: 1, today: 0, drafts: 0 })
+})
+
+test('computeMetrics counts only applied applications', () => {
+  const now = new Date().toISOString()
+  const apps = [
+    { id: '1', company: 'A', role: 'X', status: 'draft', appliedAt: now },
+    { id: '2', company: 'B', role: 'Y', status: 'applied', appliedAt: now },
+  ]
+
+  const metrics = computeMetrics(apps)
+  assert.equal(metrics.total, 1)
+  assert.equal(metrics.today, 1)
+  assert.equal(metrics.drafts, 1)
+})
+
+test('computeMetrics prefers applied over draft for matching application records', () => {
+  const now = new Date().toISOString()
+  const apps = [
+    { id: '1', company: 'A', role: 'X', url: 'https://jobs/1', status: 'draft', appliedAt: now },
+    { id: '2', company: 'A', role: 'X', url: 'https://jobs/1', status: 'applied', appliedAt: now },
+  ]
+
+  const metrics = computeMetrics(apps)
+  assert.equal(metrics.total, 1)
+  assert.equal(metrics.today, 1)
+  assert.equal(metrics.drafts, 0)
 })

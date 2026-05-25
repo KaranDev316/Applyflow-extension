@@ -41,7 +41,7 @@ function Popup() {
   )
 
   return (
-    <main className="w-80 bg-white p-4 text-slate-900">
+    <main className="w-80 max-w-full overflow-hidden bg-white p-4 text-slate-900">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">ApplyFlow</p>
@@ -129,7 +129,7 @@ function Popup() {
       )}
 
       {activeTab === 'Tracker' && (
-        <div className="mt-4">
+        <div className="mt-4 min-w-0 overflow-hidden">
           <div className="mb-3 flex flex-wrap gap-2">
             {FILTERS.map((filter) => (
               <button

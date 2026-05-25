@@ -113,23 +113,23 @@ function ApplicationItem({ application, onDelete }) {
   }, [confirming, application.id, onDelete])
 
   return (
-    <div className="group flex items-start gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
-      <div className="min-w-0 flex-1">
+    <div className="group flex min-w-0 items-start gap-2 overflow-hidden rounded-md border border-slate-200 bg-white px-3 py-2">
+      <div className="min-w-0 flex-1 basis-0">
         <p className="truncate text-sm font-medium text-slate-800">
           {application.role || 'Untitled Role'}
         </p>
         <p className="truncate text-xs text-slate-500">
           {application.company || 'Unknown Company'}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-400">
+        <div className="mt-1 flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-hidden">
+          <span className="shrink-0 text-xs text-slate-400">
             {formatDate(application.appliedAt)}
           </span>
           {application.url && (
             <>
               <span className="text-xs text-slate-300">·</span>
               <a
-                className="truncate text-xs text-blue-500 hover:text-blue-600 hover:underline"
+                className="min-w-0 truncate text-xs text-blue-500 hover:text-blue-600 hover:underline"
                 href={application.url}
                 rel="noopener noreferrer"
                 target="_blank"
@@ -140,7 +140,7 @@ function ApplicationItem({ application, onDelete }) {
             </>
           )}
           <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
               application.status === 'applied'
                 ? 'bg-emerald-100 text-emerald-700'
                 : 'bg-amber-100 text-amber-700'
@@ -187,15 +187,15 @@ function ApplicationList({ applications, error, isLoading, onDelete, statusFilte
   }
 
   return (
-    <div className="grid gap-2.5">
+    <div className="grid min-w-0 gap-2.5 overflow-hidden">
       <TrackerMetrics applications={normalizedApplications} />
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4 overflow-hidden">
         {filteredDraftApplications.length > 0 && (
-          <section>
+          <section className="min-w-0 overflow-hidden">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Draft applications
             </h2>
-            <div className="grid gap-1.5">
+            <div className="grid min-w-0 gap-1.5 overflow-hidden">
               {filteredDraftApplications.map((app) => (
                 <ApplicationItem key={app.id} application={app} onDelete={onDelete} />
               ))}
@@ -204,11 +204,11 @@ function ApplicationList({ applications, error, isLoading, onDelete, statusFilte
         )}
 
         {filteredAppliedApplications.length > 0 && (
-          <section>
+          <section className="min-w-0 overflow-hidden">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Applied applications
             </h2>
-            <div className="grid gap-1.5">
+            <div className="grid min-w-0 gap-1.5 overflow-hidden">
               {filteredAppliedApplications.map((app) => (
                 <ApplicationItem key={app.id} application={app} onDelete={onDelete} />
               ))}

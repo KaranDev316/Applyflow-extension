@@ -80,6 +80,10 @@ test('Submission confirmation via fetch POST upgrades draft', async () => {
   globalThis.window.fetch = async (input, init) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
 
   const stop = startSubmissionDetection({ timeoutMs: 100 })
+  const form = document.createElement('form')
+  document.body.appendChild(form)
+  form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
+
   await globalThis.window.fetch('https://api.greenhouse.io/apply', { method: 'POST' })
 
   // allow the detector to settle
@@ -88,6 +92,26 @@ test('Submission confirmation via fetch POST upgrades draft', async () => {
   const history = await getApplicationHistory()
   assert.equal(history.length, 1)
   assert.equal(history[0].status, 'applied')
+  stop()
+})
+
+test('Successful application POST without submit intent does not mark applied', async () => {
+  await saveDraftApplication({
+    company: 'Initech',
+    role: 'Developer',
+    url: 'https://jobs.greenhouse.io/role',
+  })
+
+  globalThis.window.fetch = async (input, init) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
+
+  const stop = startSubmissionDetection({ timeoutMs: 100 })
+  await globalThis.window.fetch('https://api.greenhouse.io/apply', { method: 'POST' })
+
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  const history = await getApplicationHistory()
+  assert.equal(history.length, 1)
+  assert.equal(history[0].status, 'draft')
   stop()
 })
 
@@ -134,6 +158,45 @@ test('Success text mutation upgrades draft', async () => {
   const history = await getApplicationHistory()
   assert.equal(history.length, 1)
   assert.equal(history[0].status, 'applied')
+  stop()
+})
+
+test('Success text without submit intent does not mark applied', async () => {
+  await saveDraftApplication({
+    company: 'Initech',
+    role: 'Developer',
+    url: 'https://jobs.greenhouse.io/role',
+  })
+
+  const stop = startSubmissionDetection({ timeoutMs: 100 })
+
+  const successMessage = document.createElement('div')
+  successMessage.textContent = 'Thank you for applying to this role.'
+  document.body.appendChild(successMessage)
+
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  const history = await getApplicationHistory()
+  assert.equal(history.length, 1)
+  assert.equal(history[0].status, 'draft')
+  stop()
+})
+
+test('Confirmation-looking URL without submit intent does not mark applied', async () => {
+  initDom('https://jobs.greenhouse.io/confirmation')
+  await saveDraftApplication({
+    company: 'Initech',
+    role: 'Developer',
+    url: 'https://jobs.greenhouse.io/role',
+  })
+
+  const stop = startSubmissionDetection({ timeoutMs: 100 })
+
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  const history = await getApplicationHistory()
+  assert.equal(history.length, 1)
+  assert.equal(history[0].status, 'draft')
   stop()
 })
 

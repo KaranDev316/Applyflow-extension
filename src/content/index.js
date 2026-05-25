@@ -37,7 +37,7 @@ if (!wasContentScriptLoaded) {
   })
 }
 
-window.addEventListener('load', () => {
+function startSubmissionDetector() {
   logPageState('Page fully loaded')
   try {
     // Start monitoring for successful submissions so drafts can be upgraded.
@@ -45,4 +45,10 @@ window.addEventListener('load', () => {
   } catch (err) {
     console.warn('ApplyFlow: Failed to start submission detection', err)
   }
-})
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('load', startSubmissionDetector, { once: true })
+} else {
+  startSubmissionDetector()
+}

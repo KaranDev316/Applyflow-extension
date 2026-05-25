@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import ProfileInput from './ProfileInput'
 
 const fields = [
@@ -18,6 +19,30 @@ function ProfileForm({
   saveError,
   validationErrors = {},
 }) {
+  const statusRef = useRef(null)
+  const wasSavedRef = useRef(false)
+
+  useEffect(() => {
+    if (!isSaved || wasSavedRef.current) {
+      wasSavedRef.current = isSaved
+      return
+    }
+
+    wasSavedRef.current = true
+
+    const frameId = window.requestAnimationFrame(() => {
+      const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+      statusRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isSaved])
+
   return (
     <form className="grid gap-2.5" onSubmit={onSubmit}>
       {isLoading && (
@@ -47,7 +72,13 @@ function ProfileForm({
       </button>
 
       {isSaved && (
-        <p className="text-center text-sm font-medium text-emerald-600">Profile Saved</p>
+        <p
+          className="scroll-mt-3 text-center text-sm font-medium text-emerald-600"
+          ref={statusRef}
+          role="status"
+        >
+          Profile Saved
+        </p>
       )}
       {saveError && (
         <p className="text-center text-sm font-medium text-red-600">{saveError}</p>

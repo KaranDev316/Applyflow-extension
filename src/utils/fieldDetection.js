@@ -10,10 +10,21 @@
 // ---------------------------------------------------------------------------
 
 const FIELD_KEYWORDS = {
-  name: ['name'],
+  firstName: ['first name', 'firstname', 'first_name', 'given name', 'given_name'],
+  lastName: ['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name'],
+  name: ['name', 'full name', 'fullname', 'full_name'],
   email: ['email'],
   phone: ['phone', 'telephone', 'mobile'],
+  address: ['address', 'street'],
+  city: ['city'],
+  state: ['state', 'province', 'region'],
+  country: ['country'],
+  postalCode: ['postal', 'zip'],
   linkedin: ['linkedin'],
+  github: ['github'],
+  portfolio: ['portfolio'],
+  website: ['website', 'personal site', 'personal website'],
+  currentCompany: ['current company', 'current employer', 'employer', 'company'],
   resume: ['resume', 'cv'],
 }
 
@@ -82,15 +93,28 @@ function buildFieldInfo(element) {
 /**
  * Detect all relevant form fields on the current page.
  *
- * @returns {{ name: Array, email: Array, phone: Array, linkedin: Array,
+ * @returns {{ name: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
+ *             address: Array, city: Array, state: Array, country: Array, postalCode: Array,
+ *             linkedin: Array, github: Array, portfolio: Array, website: Array, currentCompany: Array,
  *             resume: Array, textarea: Array, select: Array, checkbox: Array }}
  */
 export function detectFormFields() {
   const fields = {
     name: [],
+    firstName: [],
+    lastName: [],
     email: [],
     phone: [],
+    address: [],
+    city: [],
+    state: [],
+    country: [],
+    postalCode: [],
     linkedin: [],
+    github: [],
+    portfolio: [],
+    website: [],
+    currentCompany: [],
     resume: [],
     textarea: [],
     select: [],
@@ -110,8 +134,30 @@ export function detectFormFields() {
       fields.email.push(info)
     } else if (input.type === 'tel' || matchesKeywords(text, FIELD_KEYWORDS.phone)) {
       fields.phone.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.firstName)) {
+      fields.firstName.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.lastName)) {
+      fields.lastName.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.address)) {
+      fields.address.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.city)) {
+      fields.city.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.state)) {
+      fields.state.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.country)) {
+      fields.country.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.postalCode)) {
+      fields.postalCode.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.linkedin)) {
       fields.linkedin.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.github)) {
+      fields.github.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.portfolio)) {
+      fields.portfolio.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.website)) {
+      fields.website.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.currentCompany)) {
+      fields.currentCompany.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.name)) {
       fields.name.push(info)
     }

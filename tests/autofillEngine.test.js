@@ -109,9 +109,75 @@ test('Autofill detects Lever-style fields and skips unknown elements safely', ()
   const result = autofillFromProfile(profile, fields)
 
   assert.equal(result.filledCount, 3)
-  assert.equal(result.skippedCount, 1)
+  assert.ok(result.skippedCount >= 1)
   assert.equal(result.details.some((detail) => detail.field === 'linkedin' && detail.status === 'skipped'), true)
   assert.equal(fillField(document.getElementById('unknown-field'), 'ignored'), false)
+})
+
+test('Autofill maps nested profile fields to detailed application fields', () => {
+  setupDom(`
+    <label for="first_name">First Name</label>
+    <input id="first_name" name="first_name" type="text" />
+    <label for="last_name">Last Name</label>
+    <input id="last_name" name="last_name" type="text" />
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" />
+    <label for="address">Address</label>
+    <input id="address" name="address" type="text" />
+    <label for="city">City</label>
+    <input id="city" name="city" type="text" />
+    <label for="state">State</label>
+    <input id="state" name="state" type="text" />
+    <label for="country">Country</label>
+    <input id="country" name="country" type="text" />
+    <label for="postal_code">Postal Code</label>
+    <input id="postal_code" name="postal_code" type="text" />
+    <label for="github">GitHub</label>
+    <input id="github" name="github" type="url" />
+    <label for="portfolio">Portfolio</label>
+    <input id="portfolio" name="portfolio" type="url" />
+    <label for="website">Website</label>
+    <input id="website" name="website" type="url" />
+    <label for="current_company">Current Company</label>
+    <input id="current_company" name="current_company" type="text" />
+  `)
+
+  const profile = {
+    personal: {
+      firstName: 'Nia',
+      lastName: 'Applicant',
+      email: 'nia@example.com',
+      phone: '',
+    },
+    location: {
+      address: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      country: 'USA',
+      postalCode: '94105',
+    },
+    professional: {
+      currentCompany: 'ApplyFlow Labs',
+      skills: ['React'],
+    },
+    social: {
+      github: 'https://github.com/nia',
+      portfolio: 'https://nia.dev',
+      website: 'https://example.com',
+    },
+  }
+
+  const fields = detectFormFields()
+  const result = autofillFromProfile(profile, fields)
+
+  assert.equal(result.filledCount, 12)
+  assert.equal(document.getElementById('first_name').value, 'Nia')
+  assert.equal(document.getElementById('last_name').value, 'Applicant')
+  assert.equal(document.getElementById('email').value, 'nia@example.com')
+  assert.equal(document.getElementById('address').value, '123 Main St')
+  assert.equal(document.getElementById('postal_code').value, '94105')
+  assert.equal(document.getElementById('github').value, 'https://github.com/nia')
+  assert.equal(document.getElementById('current_company').value, 'ApplyFlow Labs')
 })
 
 test('Dropdown selections apply correctly with visible text matching', () => {

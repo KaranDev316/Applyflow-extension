@@ -54,6 +54,38 @@ beforeEach(() => {
   installChromeStorageMock()
 })
 
+const migratedAdaProfile = {
+  personal: {
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    preferredName: '',
+    email: 'ada@example.com',
+    phone: '555-0101',
+  },
+  location: {
+    address: '',
+    city: '',
+    state: '',
+    country: '',
+    postalCode: '',
+  },
+  documents: {
+    resume: '',
+    coverLetter: '',
+  },
+  professional: {
+    currentCompany: '',
+    experienceYears: '',
+    skills: [],
+  },
+  social: {
+    linkedin: 'https://linkedin.com/in/ada',
+    github: '',
+    portfolio: '',
+    website: '',
+  },
+}
+
 test('saving profile persists after browser restart', async () => {
   const profile = {
     name: 'Ada Lovelace',
@@ -68,18 +100,44 @@ test('saving profile persists after browser restart', async () => {
   installChromeStorageMock()
   backingStore = restartedSessionStore
 
-  assert.deepEqual(await getProfile(), profile)
+  assert.deepEqual(await getProfile(), migratedAdaProfile)
+})
+
+test('old flat profile data migrates to nested profile shape', async () => {
+  backingStore.profile = {
+    name: 'John Doe',
+    email: 'john@example.com',
+    phone: '1234567890',
+    linkedin: 'https://linkedin.com/in/john',
+  }
+
+  assert.deepEqual(await getProfile(), {
+    ...emptyProfile,
+    personal: {
+      ...emptyProfile.personal,
+      firstName: 'John',
+      lastName: 'Doe',
+      email: 'john@example.com',
+      phone: '1234567890',
+    },
+    social: {
+      ...emptyProfile.social,
+      linkedin: 'https://linkedin.com/in/john',
+    },
+  })
 })
 
 test('empty required fields show validation errors', () => {
   assert.deepEqual(validateProfile({
-    name: '',
-    email: '',
-    phone: '',
-    linkedin: '',
+    personal: {
+      firstName: '',
+      lastName: '',
+      email: '',
+    },
   }), {
-    name: 'This field is required',
-    email: 'This field is required',
+    'personal.firstName': 'This field is required',
+    'personal.lastName': 'This field is required',
+    'personal.email': 'This field is required',
   })
 })
 
@@ -99,10 +157,18 @@ test('editing profile updates stored values', async () => {
   })
 
   assert.deepEqual(await getProfile(), {
-    name: 'Grace Brewster Hopper',
-    email: 'grace.hopper@example.com',
-    phone: '555-0103',
-    linkedin: 'https://www.linkedin.com/in/grace-hopper',
+    ...emptyProfile,
+    personal: {
+      ...emptyProfile.personal,
+      firstName: 'Grace',
+      lastName: 'Brewster Hopper',
+      email: 'grace.hopper@example.com',
+      phone: '555-0103',
+    },
+    social: {
+      ...emptyProfile.social,
+      linkedin: 'https://www.linkedin.com/in/grace-hopper',
+    },
   })
 })
 
@@ -115,7 +181,7 @@ test('invalid URLs are handled properly', async () => {
   }
 
   assert.deepEqual(validateProfile(invalidProfile), {
-    linkedin: 'Enter a valid URL',
+    'social.linkedin': 'Enter a valid URL',
   })
 
   await assert.rejects(
@@ -123,7 +189,7 @@ test('invalid URLs are handled properly', async () => {
     (error) => {
       assert.equal(error.message, 'Profile validation failed')
       assert.deepEqual(error.validationErrors, {
-        linkedin: 'Enter a valid URL',
+        'social.linkedin': 'Enter a valid URL',
       })
       return true
     },

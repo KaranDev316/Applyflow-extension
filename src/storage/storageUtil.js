@@ -1,10 +1,12 @@
+import { emptyProfile, normalizeProfile } from './profileStorage.js'
+
 /**
  * Utility functions for reading and writing data from chrome.storage.local
  */
 
 /**
  * Get profile data from chrome.storage.local
- * @returns {Promise<object>} Profile object { name, email, linkedin }
+ * @returns {Promise<object>} Normalized profile object
  */
 export async function getProfileFromStorage() {
   return new Promise((resolve, reject) => {
@@ -13,8 +15,7 @@ export async function getProfileFromStorage() {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
         } else {
-          const profile = result.profile || { name: '', email: '', phone: '', linkedin: '' }
-          resolve(profile)
+          resolve(normalizeProfile(result.profile || emptyProfile))
         }
       })
     } catch (error) {
@@ -25,13 +26,13 @@ export async function getProfileFromStorage() {
 
 /**
  * Save profile data to chrome.storage.local
- * @param {object} profile - Profile object { name, email, linkedin }
+ * @param {object} profile - Profile object
  * @returns {Promise<void>}
  */
 export async function saveProfileToStorage(profile) {
   return new Promise((resolve, reject) => {
     try {
-      chrome.storage.local.set({ profile }, () => {
+      chrome.storage.local.set({ profile: normalizeProfile(profile) }, () => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
         } else {

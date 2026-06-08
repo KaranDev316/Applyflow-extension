@@ -20,10 +20,14 @@ let isAutofillRunning = false
 
 function summarizeProfile(profile) {
   return {
-    name: Boolean(profile.name),
-    email: Boolean(profile.email),
-    phone: Boolean(profile.phone),
-    linkedin: Boolean(profile.linkedin),
+    firstName: Boolean(profile?.personal?.firstName || profile?.name),
+    lastName: Boolean(profile?.personal?.lastName),
+    email: Boolean(profile?.personal?.email || profile?.email),
+    phone: Boolean(profile?.personal?.phone || profile?.phone),
+    linkedin: Boolean(profile?.social?.linkedin || profile?.linkedin),
+    github: Boolean(profile?.social?.github),
+    portfolio: Boolean(profile?.social?.portfolio),
+    website: Boolean(profile?.social?.website),
   }
 }
 

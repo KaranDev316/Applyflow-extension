@@ -115,11 +115,41 @@ function fillCheckbox(element, value) {
  * Order matters – fields are filled in this order.
  */
 const PROFILE_FIELD_MAP = [
+  { profileKey: 'personal.firstName', fieldCategory: 'firstName' },
+  { profileKey: 'personal.lastName', fieldCategory: 'lastName' },
   { profileKey: 'name', fieldCategory: 'name' },
-  { profileKey: 'email', fieldCategory: 'email' },
-  { profileKey: 'phone', fieldCategory: 'phone' },
-  { profileKey: 'linkedin', fieldCategory: 'linkedin' },
+  { profileKey: 'personal.email', fieldCategory: 'email' },
+  { profileKey: 'personal.phone', fieldCategory: 'phone' },
+  { profileKey: 'location.address', fieldCategory: 'address' },
+  { profileKey: 'location.city', fieldCategory: 'city' },
+  { profileKey: 'location.state', fieldCategory: 'state' },
+  { profileKey: 'location.country', fieldCategory: 'country' },
+  { profileKey: 'location.postalCode', fieldCategory: 'postalCode' },
+  { profileKey: 'social.linkedin', fieldCategory: 'linkedin' },
+  { profileKey: 'social.github', fieldCategory: 'github' },
+  { profileKey: 'social.portfolio', fieldCategory: 'portfolio' },
+  { profileKey: 'social.website', fieldCategory: 'website' },
+  { profileKey: 'professional.currentCompany', fieldCategory: 'currentCompany' },
 ]
+
+function getProfileValue(profile, path) {
+  if (path === 'name') {
+    const legacyName = profile?.name
+    if (legacyName) return legacyName
+
+    return [profile?.personal?.firstName, profile?.personal?.lastName]
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  const value = path.split('.').reduce((current, key) => current?.[key], profile)
+  return Array.isArray(value) ? value.join(', ') : value
+}
+
+function getLegacyProfileValue(profile, path) {
+  const legacyKey = path.split('.').at(-1)
+  return profile?.[legacyKey]
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -175,7 +205,7 @@ export function autofillFromProfile(profile, fields) {
   let skippedCount = 0
 
   for (const { profileKey, fieldCategory } of PROFILE_FIELD_MAP) {
-    const value = profile[profileKey]
+    const value = getProfileValue(profile, profileKey) || getLegacyProfileValue(profile, profileKey)
     const candidates = fields[fieldCategory]
 
     if (!value || !candidates || candidates.length === 0) {
@@ -226,7 +256,28 @@ function selectOptionMatchesText(optionText, needle) {
 }
 
 function selectHasExactProfileValue(element, profile) {
-  const candidates = Object.values(profile)
+  const candidates = [
+    profile?.name,
+    profile?.email,
+    profile?.phone,
+    profile?.linkedin,
+    profile?.personal?.firstName,
+    profile?.personal?.lastName,
+    profile?.personal?.preferredName,
+    profile?.personal?.email,
+    profile?.personal?.phone,
+    profile?.location?.address,
+    profile?.location?.city,
+    profile?.location?.state,
+    profile?.location?.country,
+    profile?.location?.postalCode,
+    profile?.professional?.currentCompany,
+    profile?.social?.linkedin,
+    profile?.social?.github,
+    profile?.social?.portfolio,
+    profile?.social?.website,
+    ...(profile?.professional?.skills || []),
+  ]
     .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
     .map((value) => String(value).trim().toLowerCase())
 
@@ -248,7 +299,10 @@ export function autofillSelects(selectFields, profile) {
       .join(' ')
       .toLowerCase()
 
-    if (text.includes('phone') && profile.phone) {
+    const email = profile?.personal?.email || profile?.email
+    const phone = profile?.personal?.phone || profile?.phone
+
+    if (text.includes('phone') && phone) {
       // Phone country-code selects — skip, handled by phone input
       continue
     }
@@ -261,7 +315,7 @@ export function autofillSelects(selectFields, profile) {
     }
 
     const contactMode = text.includes('contact') || text.includes('preferred method')
-    if (contactMode && profile.email) {
+    if (contactMode && email) {
       if (fillField(sel.element, 'Email')) {
         filled += 1
         continue
@@ -272,7 +326,7 @@ export function autofillSelects(selectFields, profile) {
       }
     }
 
-    if (contactMode && profile.phone) {
+    if (contactMode && phone) {
       if (fillField(sel.element, 'Phone')) {
         filled += 1
         continue

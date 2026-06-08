@@ -1,12 +1,37 @@
 export const emptyProfile = {
-  name: '',
-  email: '',
-  phone: '',
-  linkedin: '',
+  personal: {
+    firstName: '',
+    lastName: '',
+    preferredName: '',
+    email: '',
+    phone: '',
+  },
+  location: {
+    address: '',
+    city: '',
+    state: '',
+    country: '',
+    postalCode: '',
+  },
+  documents: {
+    resume: '',
+    coverLetter: '',
+  },
+  professional: {
+    currentCompany: '',
+    experienceYears: '',
+    skills: [],
+  },
+  social: {
+    linkedin: '',
+    github: '',
+    portfolio: '',
+    website: '',
+  },
 }
 
-const requiredFields = ['name', 'email']
-const urlFields = ['linkedin']
+const requiredFields = ['personal.firstName', 'personal.lastName', 'personal.email']
+const urlFields = ['social.linkedin', 'social.github', 'social.portfolio', 'social.website']
 
 function getStorageArea() {
   return globalThis.chrome?.storage?.local
@@ -16,12 +41,74 @@ function getLastError() {
   return globalThis.chrome?.runtime?.lastError
 }
 
-function normalizeProfile(profile = {}) {
+function trimValue(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function getPathValue(profile, path) {
+  return path.split('.').reduce((value, key) => value?.[key], profile)
+}
+
+function splitName(name = '') {
+  const parts = trimValue(name).split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
   return {
-    name: profile.name?.trim() ?? '',
-    email: profile.email?.trim() ?? '',
-    phone: profile.phone?.trim() ?? '',
-    linkedin: profile.linkedin?.trim() ?? '',
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  }
+}
+
+function normalizeSkills(skills) {
+  if (Array.isArray(skills)) {
+    return skills.map(trimValue).filter(Boolean)
+  }
+
+  if (typeof skills === 'string') {
+    return skills.split(',').map(trimValue).filter(Boolean)
+  }
+
+  return []
+}
+
+export function normalizeProfile(profile = {}) {
+  const migratedName = splitName(profile.name)
+  const personal = profile.personal || {}
+  const location = profile.location || {}
+  const documents = profile.documents || {}
+  const professional = profile.professional || {}
+  const social = profile.social || {}
+
+  return {
+    personal: {
+      firstName: trimValue(personal.firstName) || migratedName.firstName,
+      lastName: trimValue(personal.lastName) || migratedName.lastName,
+      preferredName: trimValue(personal.preferredName),
+      email: trimValue(personal.email || profile.email),
+      phone: trimValue(personal.phone || profile.phone),
+    },
+    location: {
+      address: trimValue(location.address),
+      city: trimValue(location.city),
+      state: trimValue(location.state),
+      country: trimValue(location.country),
+      postalCode: trimValue(location.postalCode),
+    },
+    documents: {
+      resume: trimValue(documents.resume),
+      coverLetter: trimValue(documents.coverLetter),
+    },
+    professional: {
+      currentCompany: trimValue(professional.currentCompany),
+      experienceYears: trimValue(professional.experienceYears),
+      skills: normalizeSkills(professional.skills),
+    },
+    social: {
+      linkedin: trimValue(social.linkedin || profile.linkedin),
+      github: trimValue(social.github),
+      portfolio: trimValue(social.portfolio),
+      website: trimValue(social.website),
+    },
   }
 }
 
@@ -38,15 +125,16 @@ export function validateProfile(profile = {}) {
   const normalizedProfile = normalizeProfile(profile)
   const errors = {}
 
-  requiredFields.forEach((fieldName) => {
-    if (!normalizedProfile[fieldName]) {
-      errors[fieldName] = 'This field is required'
+  requiredFields.forEach((fieldPath) => {
+    if (!getPathValue(normalizedProfile, fieldPath)) {
+      errors[fieldPath] = 'This field is required'
     }
   })
 
-  urlFields.forEach((fieldName) => {
-    if (normalizedProfile[fieldName] && !isValidUrl(normalizedProfile[fieldName])) {
-      errors[fieldName] = 'Enter a valid URL'
+  urlFields.forEach((fieldPath) => {
+    const value = getPathValue(normalizedProfile, fieldPath)
+    if (value && !isValidUrl(value)) {
+      errors[fieldPath] = 'Enter a valid URL'
     }
   })
 
@@ -99,7 +187,8 @@ export async function saveProfile(profile) {
     throw new Error('chrome.storage.local is unavailable')
   }
 
-  const validationErrors = validateProfile(profile)
+  const normalizedProfile = normalizeProfile(profile)
+  const validationErrors = validateProfile(normalizedProfile)
 
   if (Object.keys(validationErrors).length > 0) {
     const error = new Error('Profile validation failed')
@@ -108,7 +197,7 @@ export async function saveProfile(profile) {
   }
 
   return new Promise((resolve, reject) => {
-    storage.set({ profile: normalizeProfile(profile) }, () => {
+    storage.set({ profile: normalizedProfile }, () => {
       const error = getLastError()
 
       if (error) {

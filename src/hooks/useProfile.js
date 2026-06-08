@@ -48,6 +48,7 @@ export function useProfile() {
 
   const handleFieldChange = (event) => {
     const { name, value } = event.target
+    const path = name.split('.')
 
     setIsSaved(false)
     setSaveError('')
@@ -58,7 +59,12 @@ export function useProfile() {
 
     setProfile((currentProfile) => ({
       ...currentProfile,
-      [name]: value,
+      [path[0]]: {
+        ...currentProfile[path[0]],
+        [path[1]]: name === 'professional.skills'
+          ? value.split(',').map((skill) => skill.trim()).filter(Boolean)
+          : value,
+      },
     }))
   }
 

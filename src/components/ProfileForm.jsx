@@ -1,12 +1,57 @@
 import { useEffect, useRef } from 'react'
 import ProfileInput from './ProfileInput'
 
-const fields = [
-  { id: 'name', label: 'Name', type: 'text' },
-  { id: 'email', label: 'Email', type: 'email' },
-  { id: 'phone', label: 'Phone', type: 'tel' },
-  { id: 'linkedin', label: 'LinkedIn', type: 'url' },
+const sections = [
+  {
+    title: 'Personal Information',
+    fields: [
+      { id: 'personal.firstName', label: 'First Name', type: 'text' },
+      { id: 'personal.lastName', label: 'Last Name', type: 'text' },
+      { id: 'personal.preferredName', label: 'Preferred Name', type: 'text' },
+      { id: 'personal.email', label: 'Email', type: 'email' },
+      { id: 'personal.phone', label: 'Phone', type: 'tel' },
+    ],
+  },
+  {
+    title: 'Location',
+    fields: [
+      { id: 'location.address', label: 'Address', type: 'text' },
+      { id: 'location.city', label: 'City', type: 'text' },
+      { id: 'location.state', label: 'State', type: 'text' },
+      { id: 'location.country', label: 'Country', type: 'text' },
+      { id: 'location.postalCode', label: 'Zip / Postal Code', type: 'text' },
+    ],
+  },
+  {
+    title: 'Documents',
+    fields: [
+      { id: 'documents.resume', label: 'Resume', type: 'text' },
+      { id: 'documents.coverLetter', label: 'Cover Letter', type: 'text' },
+    ],
+  },
+  {
+    title: 'Professional Information',
+    fields: [
+      { id: 'professional.currentCompany', label: 'Current Company', type: 'text' },
+      { id: 'professional.experienceYears', label: 'Years of Experience', type: 'text' },
+      { id: 'professional.skills', label: 'Skills', type: 'text' },
+    ],
+  },
+  {
+    title: 'Social Links',
+    fields: [
+      { id: 'social.linkedin', label: 'LinkedIn', type: 'url' },
+      { id: 'social.github', label: 'GitHub', type: 'url' },
+      { id: 'social.portfolio', label: 'Portfolio', type: 'url' },
+      { id: 'social.website', label: 'Website', type: 'url' },
+    ],
+  },
 ]
+
+function getFieldValue(profile, fieldId) {
+  const value = fieldId.split('.').reduce((current, key) => current?.[key], profile)
+  return Array.isArray(value) ? value.join(', ') : value || ''
+}
 
 function ProfileForm({
   isLoading,
@@ -52,15 +97,22 @@ function ProfileForm({
         <p className="text-sm font-medium text-red-600">{loadError}</p>
       )}
 
-      {fields.map((field) => (
-        <ProfileInput
-          disabled={isLoading}
-          error={validationErrors[field.id]}
-          field={field}
-          key={field.id}
-          onChange={onFieldChange}
-          value={profile[field.id]}
-        />
+      {sections.map((section) => (
+        <section className="grid gap-2.5" key={section.title}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            {section.title}
+          </h2>
+          {section.fields.map((field) => (
+            <ProfileInput
+              disabled={isLoading}
+              error={validationErrors[field.id]}
+              field={field}
+              key={field.id}
+              onChange={onFieldChange}
+              value={getFieldValue(profile, field.id)}
+            />
+          ))}
+        </section>
       ))}
 
       <button

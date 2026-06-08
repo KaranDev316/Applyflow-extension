@@ -4,6 +4,8 @@
 
 import { MESSAGE_ACTIONS } from '../types/messages'
 
+const responsiveFrameIdsByTab = new Map()
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
 
@@ -23,12 +25,13 @@ function getContentScriptFiles() {
 }
 
 function isMissingReceiverError(error) {
+  const msg = typeof error === 'string' ? error : error?.message || ''
   return /receiving end does not exist|could not establish connection|no response/i.test(
-    error.message,
+    msg,
   )
 }
 
-function sendTabMessage(tabId, action, data = {}) {
+function sendTabMessage(tabId, action, data = {}, options = {}) {
   return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(
       tabId,
@@ -36,6 +39,7 @@ function sendTabMessage(tabId, action, data = {}) {
         action,
         ...data,
       },
+      options,
       (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -49,6 +53,75 @@ function sendTabMessage(tabId, action, data = {}) {
       },
     )
   })
+}
+
+async function sendMessageToAnyFrame(tab, action, data = {}, preferredFrameIds = []) {
+  const cachedFrameIds = responsiveFrameIdsByTab.get(tab.id) || []
+  const frameIds = [...new Set([...cachedFrameIds, 0, ...preferredFrameIds])]
+  let lastError = null
+
+  for (const frameId of frameIds) {
+    try {
+      const response = await sendTabMessage(tab.id, action, data, { frameId })
+      responsiveFrameIdsByTab.set(tab.id, [frameId])
+      console.log('ApplyFlow popup: Content script responded', {
+        action,
+        tabId: tab.id,
+        frameId,
+      })
+      return response
+    } catch (error) {
+      lastError = error
+      console.warn('ApplyFlow popup: Content script frame did not respond', {
+        action,
+        tabId: tab.id,
+        frameId,
+        error: error.message || error,
+      })
+
+      if (!isMissingReceiverError(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw lastError || new Error('No content script frame responded')
+}
+
+async function getAccessibleFrameIds(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => true,
+    })
+
+    return results
+      .map((result) => result.frameId)
+      .filter((frameId) => Number.isInteger(frameId))
+  } catch (error) {
+    console.warn('ApplyFlow popup: Failed to probe accessible frames', {
+      tabId,
+      error: error.message,
+    })
+    return [0]
+  }
+}
+
+async function injectContentScriptIntoFrame(tabId, frameId, files) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      files,
+    })
+    return true
+  } catch (error) {
+    console.warn('ApplyFlow popup: Content script injection failed for frame', {
+      tabId,
+      frameId,
+      error: error.message,
+    })
+    return false
+  }
 }
 
 /**
@@ -68,7 +141,7 @@ export async function sendMessageToContentScript(action, data = {}) {
     })
 
     try {
-      return await sendTabMessage(tab.id, action, data)
+      return await sendMessageToAnyFrame(tab, action, data)
     } catch (error) {
       if (!isMissingReceiverError(error)) {
         throw error
@@ -79,8 +152,19 @@ export async function sendMessageToContentScript(action, data = {}) {
         error: error.message,
       })
 
-      await injectContentScriptIntoActiveTab(tab)
-      return sendTabMessage(tab.id, action, data)
+      const injectedFrameIds = await injectContentScriptIntoActiveTab(tab)
+      
+      // Retry to allow async initialization (e.g., Vite dynamic imports) to complete
+      let retries = 5
+      while (retries > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        try {
+          return await sendMessageToAnyFrame(tab, action, data, injectedFrameIds)
+        } catch (err) {
+          if (retries === 1 || !isMissingReceiverError(err)) throw err
+          retries--
+        }
+      }
     }
   } catch (error) {
     console.error('Failed to send message to content script:', error)
@@ -106,10 +190,23 @@ export async function injectContentScriptIntoActiveTab(activeTab) {
     files,
   })
 
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id, allFrames: true },
-    files,
+  const accessibleFrameIds = await getAccessibleFrameIds(tab.id)
+  const injectedFrameIds = []
+
+  for (const frameId of accessibleFrameIds) {
+    const injected = await injectContentScriptIntoFrame(tab.id, frameId, files)
+    if (injected) {
+      injectedFrameIds.push(frameId)
+    }
+  }
+
+  console.log('ApplyFlow popup: Content script injection completed', {
+    tabId: tab.id,
+    accessibleFrameIds,
+    injectedFrameIds,
   })
+
+  return injectedFrameIds.length > 0 ? injectedFrameIds : accessibleFrameIds
 }
 
 /**
@@ -160,10 +257,19 @@ export async function extractMetadataFromPage() {
  */
 export async function isContentScriptActive() {
   try {
+    const tab = await getActiveTab()
+    console.log('ApplyFlow popup: Checking content script status', {
+      tabId: tab.id,
+      url: tab.url,
+    })
+
     const response = await sendMessageToContentScript(MESSAGE_ACTIONS.PING)
     return response && response.success
   } catch (error) {
-    console.warn('ApplyFlow popup: Content script ping failed:', error.message)
+    console.warn('ApplyFlow popup: Content script ping failed:', {
+      name: error.name,
+      message: error.message,
+    })
     return false
   }
 }

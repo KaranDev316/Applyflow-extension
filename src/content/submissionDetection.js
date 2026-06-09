@@ -468,7 +468,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
       console.debug('ApplyFlow: Error removing click listener', e)
     }
 
-    console.log('ApplyFlow: Submission detector stopped')
+    console.debug('ApplyFlow: Submission detector stopped')
   }
 
   return stop

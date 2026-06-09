@@ -7,7 +7,7 @@ import { logPageState, markContentScriptLoaded } from './lifecycle.js'
 import startSubmissionDetection from './submissionDetection.js'
 import { MESSAGE_ACTIONS } from '../types/messages.js'
 
-const wasContentScriptLoaded = markContentScriptLoaded()
+markContentScriptLoaded()
 
 // Always attach the listener so the extension can recover after a developer reload.
 // Vite's module caching prevents this from duplicating within the same context.

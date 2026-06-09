@@ -250,11 +250,6 @@ function getAssociatedLabelText(element) {
 
   return ''
 }
-
-function selectOptionMatchesText(optionText, needle) {
-  return optionText.toLowerCase().trim() === needle.toLowerCase().trim()
-}
-
 function selectHasExactProfileValue(element, profile) {
   const candidates = [
     profile?.name,

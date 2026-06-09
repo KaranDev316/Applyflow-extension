@@ -77,7 +77,7 @@ test('Submission confirmation via fetch POST upgrades draft', async () => {
     url: 'https://jobs.greenhouse.io/role',
   })
 
-  globalThis.window.fetch = async (input, init) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
+  globalThis.window.fetch = async (input) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
 
   const stop = startSubmissionDetection({ timeoutMs: 100 })
   const form = document.createElement('form')
@@ -102,7 +102,7 @@ test('Successful application POST without submit intent does not mark applied', 
     url: 'https://jobs.greenhouse.io/role',
   })
 
-  globalThis.window.fetch = async (input, init) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
+  globalThis.window.fetch = async (input) => ({ ok: true, status: 200, url: typeof input === 'string' ? input : input.url })
 
   const stop = startSubmissionDetection({ timeoutMs: 100 })
   await globalThis.window.fetch('https://api.greenhouse.io/apply', { method: 'POST' })
@@ -227,7 +227,7 @@ test('Failed fetch POST does not mark application as applied', async () => {
     url: 'https://jobs.greenhouse.io/role',
   })
 
-  globalThis.window.fetch = async (input, init) => ({ ok: false, status: 400, url: typeof input === 'string' ? input : input.url })
+  globalThis.window.fetch = async (input) => ({ ok: false, status: 400, url: typeof input === 'string' ? input : input.url })
 
   const stop = startSubmissionDetection({ timeoutMs: 100 })
   await globalThis.window.fetch('https://api.greenhouse.io/apply', { method: 'POST' })

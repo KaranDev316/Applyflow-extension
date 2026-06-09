@@ -75,7 +75,7 @@ test('Duplicate applications handled correctly', async () => {
 })
 
 test('Missing company names handled gracefully', async () => {
-  const rec = await addApplicationRecord({ company: '', role: 'Analyst', url: 'https://jobs/example/3' })
+  await addApplicationRecord({ company: '', role: 'Analyst', url: 'https://jobs/example/3' })
   const history = await getApplicationHistory()
   assert.equal(history.length, 1)
   assert.equal(history[0].company, '')
@@ -97,7 +97,7 @@ test('Tracker persists after browser restart', async () => {
 
 test('Delete functionality removes item correctly', async () => {
   const a = await addApplicationRecord({ company: 'ToDelete', role: 'X', url: 'https://jobs/example/5' })
-  const b = await addApplicationRecord({ company: 'Keep', role: 'Y', url: 'https://jobs/example/6' })
+  await addApplicationRecord({ company: 'Keep', role: 'Y', url: 'https://jobs/example/6' })
 
   let history = await getApplicationHistory()
   assert.equal(history.length, 2)

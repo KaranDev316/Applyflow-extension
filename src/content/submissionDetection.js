@@ -131,6 +131,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
     try {
       return extractPageMetadata() || {}
     } catch (err) {
+      console.warn('ApplyFlow: Failed to extract metadata safely', err)
       return {}
     }
   }
@@ -239,16 +240,16 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
     try {
       const href = window.location.href
       if (urlLooksLikeConfirmation(href)) {
-        markApplied('url-change', { type: 'url', url: href })
+        markApplied(reason || 'url-change', { type: 'url', url: href })
         return
       }
 
       // SPA navigation may change page content; also check for success text
       if (document && document.body && textMatchesSuccess(document.body.textContent)) {
-        markApplied('url-change-text', { type: 'text', text: document.body.textContent })
+        markApplied(reason || 'url-change-text', { type: 'text', text: document.body.textContent })
       }
     } catch (err) {
-      // ignore
+      console.warn('ApplyFlow: onUrlChange handler error', err)
     }
   }
 
@@ -292,7 +293,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
               }
             }
           } catch (err) {
-            // ignore
+            console.warn('ApplyFlow: Mutation observer handler error', err)
           }
         }
       }
@@ -302,7 +303,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
   try {
     observer.observe(document.body, { childList: true, subtree: true })
   } catch (err) {
-    // body may not be ready
+    console.warn('ApplyFlow: Failed to start DOM mutation observer', err)
   }
 
   // Intercept fetch to detect POSTs to application endpoints. Respect original behavior.
@@ -351,7 +352,9 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
           try {
             this.__applyflow_url = url
             this.__applyflow_method = method
-          } catch (e) {}
+          } catch (e) {
+            console.debug('ApplyFlow: Failed to set XHR metadata', e)
+          }
           return origOpen.apply(this, arguments)
         }
 
@@ -368,7 +371,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
               })
             }
           } catch (err) {
-            // ignore
+            console.warn('ApplyFlow: XHR load handler error', err)
           }
         })
 
@@ -381,7 +384,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
   }
 
   // Form submit observer: wait for success via other signals, do not mark on submit alone.
-  function onFormSubmit(e) {
+  function onFormSubmit() {
     try {
       rememberSubmissionIntent('form-submit')
 
@@ -396,7 +399,7 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
       }, timeoutMs)
       pendingTimers.add(timerId)
     } catch (err) {
-      // ignore
+      console.warn('ApplyFlow: onFormSubmit handler error', err)
     }
   }
 
@@ -424,32 +427,46 @@ export function startSubmissionDetection({ timeoutMs = 15000 } = {}) {
 
     try {
       observer.disconnect()
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error disconnecting observer', e)
+    }
 
     try {
       if (originals.fetch) window.fetch = originals.fetch
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error restoring fetch', e)
+    }
 
     try {
       if (originals.XHR) window.XMLHttpRequest = originals.XHR
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error restoring XHR', e)
+    }
 
     try {
       history.pushState = originals.pushState
       history.replaceState = originals.replaceState
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error restoring history API', e)
+    }
 
     try {
       window.removeEventListener('popstate', onPopState)
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error removing popstate listener', e)
+    }
 
     try {
       document.removeEventListener('submit', onFormSubmit, true)
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error removing submit listener', e)
+    }
 
     try {
       document.removeEventListener('click', onClick, true)
-    } catch (e) {}
+    } catch (e) {
+      console.debug('ApplyFlow: Error removing click listener', e)
+    }
 
     console.log('ApplyFlow: Submission detector stopped')
   }

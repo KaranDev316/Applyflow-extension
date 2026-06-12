@@ -1,16 +1,25 @@
+import {
+  normalizePhoneForCountry,
+  profileSchema,
+  profileSchemaIssuesToErrors,
+  toLocationCity,
+  toLocationCountry,
+  toLocationState,
+} from '../utils/profileValidation.js'
+
 export const emptyProfile = {
   personal: {
     firstName: '',
     lastName: '',
     preferredName: '',
     email: '',
-    phone: '',
+    phone: null,
   },
   location: {
     address: '',
-    city: '',
-    state: '',
-    country: '',
+    city: null,
+    state: null,
+    country: null,
     postalCode: '',
   },
   documents: {
@@ -78,6 +87,10 @@ export function normalizeProfile(profile = {}) {
   const documents = profile.documents || {}
   const professional = profile.professional || {}
   const social = profile.social || {}
+  const country = toLocationCountry(location.country)
+  const state = toLocationState(location.state, country?.code)
+  const city = toLocationCity(location.city, country?.code, state?.code)
+  const phone = normalizePhoneForCountry(personal.phone || profile.phone, country?.code)
 
   return {
     personal: {
@@ -85,13 +98,13 @@ export function normalizeProfile(profile = {}) {
       lastName: trimValue(personal.lastName) || migratedName.lastName,
       preferredName: trimValue(personal.preferredName),
       email: trimValue(personal.email || profile.email),
-      phone: trimValue(personal.phone || profile.phone),
+      phone,
     },
     location: {
       address: trimValue(location.address),
-      city: trimValue(location.city),
-      state: trimValue(location.state),
-      country: trimValue(location.country),
+      city,
+      state,
+      country,
       postalCode: trimValue(location.postalCode),
     },
     documents: {
@@ -137,6 +150,19 @@ export function validateProfile(profile = {}) {
       errors[fieldPath] = 'Enter a valid URL'
     }
   })
+
+  const structuredResult = profileSchema.safeParse({
+    location: {
+      country: normalizedProfile.location.country,
+      state: normalizedProfile.location.state,
+      city: normalizedProfile.location.city,
+    },
+    phone: normalizedProfile.personal.phone,
+  })
+
+  if (!structuredResult.success) {
+    Object.assign(errors, profileSchemaIssuesToErrors(structuredResult.error.issues))
+  }
 
   return errors
 }

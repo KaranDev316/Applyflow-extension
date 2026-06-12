@@ -77,6 +77,30 @@ export function useProfile() {
     }, 2000)
   }
 
+  const handleLocationPhoneChange = ({ location, phone, phoneInput }) => {
+    setIsSaved(false)
+    setSaveError('')
+    setValidationErrors((currentErrors) => ({
+      ...currentErrors,
+      'location.country': '',
+      'location.state': '',
+      'location.city': '',
+      'personal.phone': '',
+    }))
+
+    setProfile((currentProfile) => ({
+      ...currentProfile,
+      personal: {
+        ...currentProfile.personal,
+        phone: phone || (phoneInput ? { nationalNumber: phoneInput } : null),
+      },
+      location: {
+        ...currentProfile.location,
+        ...location,
+      },
+    }))
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setIsSaving(true)
@@ -110,6 +134,7 @@ export function useProfile() {
 
   return {
     handleFieldChange,
+    handleLocationPhoneChange,
     handleSubmit,
     isLoadingProfile,
     isSaved,

@@ -429,7 +429,17 @@ function getProfileValue(profile, path) {
       .join(' ')
   }
 
-  const value = path.split('.').reduce((current, key) => current?.[key], profile)
+  let value = path.split('.').reduce((current, key) => current?.[key], profile)
+
+  // Handle structured validation objects for location and phone
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (path.includes('phone')) {
+      value = value.e164 || value.nationalNumber || value
+    } else {
+      value = value.name || value
+    }
+  }
+
   return Array.isArray(value) ? value.join(', ') : value
 }
 
@@ -520,17 +530,17 @@ function selectHasExactProfileValue(element, profile) {
   const candidates = [
     profile?.name,
     profile?.email,
-    profile?.phone,
+    profile?.phone?.e164 || profile?.phone?.nationalNumber || profile?.phone,
     profile?.linkedin,
     profile?.personal?.firstName,
     profile?.personal?.lastName,
     profile?.personal?.preferredName,
     profile?.personal?.email,
-    profile?.personal?.phone,
+    profile?.personal?.phone?.e164 || profile?.personal?.phone?.nationalNumber || profile?.personal?.phone,
     profile?.location?.address,
-    profile?.location?.city,
-    profile?.location?.state,
-    profile?.location?.country,
+    profile?.location?.city?.name || profile?.location?.city,
+    profile?.location?.state?.name || profile?.location?.state,
+    profile?.location?.country?.name || profile?.location?.country,
     profile?.location?.postalCode,
     profile?.professional?.currentCompany,
     profile?.social?.linkedin,
@@ -558,7 +568,8 @@ export async function autofillSelects(selectFields, profile) {
       .toLowerCase()
 
     const email = profile?.personal?.email || profile?.email
-    const phone = profile?.personal?.phone || profile?.phone
+    const phoneObj = profile?.personal?.phone || profile?.phone
+    const phone = phoneObj?.e164 || phoneObj?.nationalNumber || phoneObj
 
     if (text.includes('phone') && phone) {
       continue

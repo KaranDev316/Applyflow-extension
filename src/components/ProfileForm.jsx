@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import ProfileInput from './ProfileInput'
+import ProfileLocationPhone from './ProfileLocationPhone'
 
 const sections = [
   {
@@ -9,16 +10,12 @@ const sections = [
       { id: 'personal.lastName', label: 'Last Name', type: 'text' },
       { id: 'personal.preferredName', label: 'Preferred Name', type: 'text' },
       { id: 'personal.email', label: 'Email', type: 'email' },
-      { id: 'personal.phone', label: 'Phone', type: 'tel' },
     ],
   },
   {
     title: 'Location',
     fields: [
       { id: 'location.address', label: 'Address', type: 'text' },
-      { id: 'location.city', label: 'City', type: 'text' },
-      { id: 'location.state', label: 'State', type: 'text' },
-      { id: 'location.country', label: 'Country', type: 'text' },
       { id: 'location.postalCode', label: 'Zip / Postal Code', type: 'text' },
     ],
   },
@@ -59,6 +56,7 @@ function ProfileForm({
   isSaving,
   loadError,
   onFieldChange,
+  onLocationPhoneChange,
   onSubmit,
   profile,
   saveError,
@@ -112,6 +110,14 @@ function ProfileForm({
               value={getFieldValue(profile, field.id)}
             />
           ))}
+          {section.title === 'Location' && (
+            <ProfileLocationPhone
+              disabled={isLoading}
+              errors={validationErrors}
+              onChange={onLocationPhoneChange}
+              profile={profile}
+            />
+          )}
         </section>
       ))}
 

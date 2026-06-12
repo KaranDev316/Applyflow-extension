@@ -122,9 +122,23 @@ export function detectFormFields() {
   }
 
   // --- Text-like inputs (text, email, url, tel) ---
-  const textInputs = document.querySelectorAll(
-    'input[type="text"], input[type="email"], input[type="url"], input[type="tel"]',
-  )
+  const textInputs = Array.from(document.querySelectorAll([
+    'input:not([type])',
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="url"]',
+    'input[type="tel"]',
+    'input[role="combobox"]',
+    'input[aria-autocomplete]',
+    'input[aria-controls]',
+    '[role="combobox"]',
+    '[aria-autocomplete]',
+    '[aria-controls]',
+    '[class*="react-select" i]',
+    '[class*="MuiAutocomplete" i]',
+    '[class*="MuiSelect" i]',
+  ].join(',')))
+    .filter((input, index, inputs) => inputs.indexOf(input) === index)
 
   textInputs.forEach((input) => {
     const text = getSearchableText(input)

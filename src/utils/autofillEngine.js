@@ -1,119 +1,406 @@
 /**
  * Smart Autofill Engine
  *
- * Modular engine that maps saved profile data to detected form fields and
- * fills them using the correct DOM technique for each element type.
- *
- * Supported element types:
- *  - text / email / url / tel  <input>
- *  - <textarea>
- *  - <select>
- *  - <input type="checkbox">
- *
- * Design goals:
- *  - Keep one handler per element type (easy to extend).
- *  - Trigger the events React / framework-controlled forms listen on.
- *  - Never throw on an unknown or disconnected field – just skip it.
+ * Maps saved profile data to detected form fields and fills them using the
+ * right interaction model for the element type. Modern job boards often use
+ * custom dropdown/autocomplete widgets, so dropdown-like fields are filled by
+ * clicking, typing, waiting for options, selecting, and verifying.
  */
+
+const DROPDOWN_TIMEOUT_MS = 3000
+const DROPDOWN_POLL_MS = 100
+const MAX_DROPDOWN_RETRIES = 3
+const TYPING_DELAY_MIN_MS = 20
+const TYPING_DELAY_MAX_MS = 60
+
+const VALIDATION_PATTERNS = [
+  /select a .+/i,
+  /please enter .+/i,
+  /required field/i,
+  /this field is required/i,
+]
+
+const DROPDOWN_OPTION_SELECTORS = [
+  '[role="option"]',
+  '[role="listbox"] [role="option"]',
+  '[role="listbox"] li',
+  '.MuiAutocomplete-option',
+  '.react-select__option',
+  '[class*="option" i]',
+  '[id*="listbox" i] li',
+  'ul li',
+]
+
+const CUSTOM_SELECT_INDICATORS = [
+  'react-select',
+  'muiautocomplete',
+  'muiselect',
+  'listbox',
+  'combobox',
+  'autocomplete',
+]
 
 // ---------------------------------------------------------------------------
 // Event helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Dispatch `input` and `change` events that React 15-19+ and other
- * frameworks listen on.  Uses native-value-setter trick so React's
- * synthetic-event system picks up the change.
- */
+function getView(element) {
+  return element?.ownerDocument?.defaultView || window
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function randomTypingDelay() {
+  return TYPING_DELAY_MIN_MS + Math.floor(Math.random() * (TYPING_DELAY_MAX_MS - TYPING_DELAY_MIN_MS + 1))
+}
+
 function dispatchInputEvents(element) {
-  element.dispatchEvent(new Event('input', { bubbles: true }))
-  element.dispatchEvent(new Event('change', { bubbles: true }))
+  const View = getView(element)
+  element.dispatchEvent(new View.Event('input', { bubbles: true }))
+  element.dispatchEvent(new View.Event('change', { bubbles: true }))
 }
 
-/**
- * Focus → set value → blur pattern that mimics real user interaction.
- */
-function focusAndBlur(element) {
-  element.dispatchEvent(new Event('focus', { bubbles: true }))
-  // Actual value setting happens between focus / blur in the caller.
-  // We call blur *after* the value has been written.
-  setTimeout(() => {
-    element.dispatchEvent(new Event('blur', { bubbles: true }))
-  }, 0)
+function dispatchTextInputEvent(element, char) {
+  const View = getView(element)
+  if (typeof View.InputEvent === 'function') {
+    element.dispatchEvent(new View.InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      data: char,
+      inputType: 'insertText',
+    }))
+    return
+  }
+
+  element.dispatchEvent(new View.Event('input', { bubbles: true }))
 }
 
-// ---------------------------------------------------------------------------
-// Per-type fill handlers
-// ---------------------------------------------------------------------------
+function dispatchKeyboardEvent(element, type, key) {
+  const View = getView(element)
+  element.dispatchEvent(new View.KeyboardEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    key,
+  }))
+}
 
-/**
- * Set a text-like input's value using the native setter so that React
- * controlled components recognise the change.
- */
-function fillTextInput(element, value) {
-  const proto =
-    element instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype
+function dispatchMouseEvent(element, type) {
+  const View = getView(element)
+  element.dispatchEvent(new View.MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    view: View,
+  }))
+}
+
+function clickLikeUser(element) {
+  if (!element) return
+  dispatchMouseEvent(element, 'mousedown')
+  dispatchMouseEvent(element, 'mouseup')
+  dispatchMouseEvent(element, 'click')
+}
+
+function focusElement(element) {
+  const View = getView(element)
+  element.focus?.()
+  element.dispatchEvent(new View.Event('focus', { bubbles: true }))
+}
+
+function blurElement(element) {
+  const View = getView(element)
+  element.blur?.()
+  element.dispatchEvent(new View.Event('blur', { bubbles: true }))
+}
+
+function setNativeValue(element, value) {
+  const View = getView(element)
+  const isTextInput = element instanceof View.HTMLInputElement
+  const isTextArea = element instanceof View.HTMLTextAreaElement
+  const proto = isTextArea
+    ? View.HTMLTextAreaElement.prototype
+    : isTextInput
+      ? View.HTMLInputElement.prototype
+      : null
+
+  if (!proto) {
+    if (element.isContentEditable) {
+      element.textContent = value
+      return
+    }
+    return
+  }
 
   const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
-
-  focusAndBlur(element)
 
   if (nativeSetter) {
     nativeSetter.call(element, value)
   } else {
     element.value = value
   }
-
-  dispatchInputEvents(element)
 }
 
-/**
- * Select the first <option> whose value or visible text matches `value`
- * (case-insensitive, trimmed).
- */
-function fillSelect(element, value) {
+async function typeHuman(element, value) {
+  if (!element) return false
+
+  focusElement(element)
+  clickLikeUser(element)
+  setNativeValue(element, '')
+  dispatchInputEvents(element)
+
+  let current = ''
+  for (const char of String(value)) {
+    dispatchKeyboardEvent(element, 'keydown', char)
+    dispatchKeyboardEvent(element, 'keypress', char)
+    current += char
+    setNativeValue(element, current)
+    dispatchTextInputEvent(element, char)
+    dispatchKeyboardEvent(element, 'keyup', char)
+    await delay(randomTypingDelay())
+  }
+
+  const View = getView(element)
+  element.dispatchEvent(new View.Event('change', { bubbles: true }))
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Detection and matching
+// ---------------------------------------------------------------------------
+
+export function detectFieldType(element) {
+  if (!element?.tagName) return 'text'
+
+  const tag = element.tagName.toLowerCase()
+  const role = (element.getAttribute('role') || '').toLowerCase()
+  const ariaAutocomplete = element.getAttribute('aria-autocomplete')
+  const ariaControls = element.getAttribute('aria-controls')
+  const classText = [
+    element.className || '',
+    element.closest?.('[class]')?.className || '',
+    element.parentElement?.className || '',
+  ]
+    .join(' ')
+    .toLowerCase()
+  const attributeText = [
+    role,
+    ariaAutocomplete || '',
+    ariaControls || '',
+    element.getAttribute('aria-haspopup') || '',
+  ]
+    .join(' ')
+    .toLowerCase()
+  const indicatorText = `${classText} ${attributeText}`
+
+  if (tag === 'select') return 'native-select'
+  if (tag === 'textarea') return 'textarea'
+  if (role === 'combobox') return 'combobox'
+  if (ariaAutocomplete || ariaControls) return 'autocomplete'
+  if (CUSTOM_SELECT_INDICATORS.some((indicator) => indicatorText.includes(indicator))) {
+    return 'custom-select'
+  }
+
+  return 'text'
+}
+
+export function normalize(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s,._\-()[\]{}:+/\\|'"`~!@#$%^&*?;]+/g, '')
+}
+
+function scoreOption(optionText, desiredValue) {
+  const normalizedOption = normalize(optionText)
+  const normalizedDesired = normalize(desiredValue)
+
+  if (!normalizedOption || !normalizedDesired) return 0
+  if (normalizedOption === normalizedDesired) return 100
+  if (normalizedOption.includes(normalizedDesired)) return 85
+  if (normalizedDesired.includes(normalizedOption)) return 70
+
+  const desiredTokens = String(desiredValue).toLowerCase().split(/[\s,._\-()[\]{}:+/\\|'"`~!@#$%^&*?;]+/).filter(Boolean)
+  const optionLower = String(optionText).toLowerCase()
+  const matchedTokens = desiredTokens.filter((token) => optionLower.includes(token)).length
+
+  return desiredTokens.length > 0 ? Math.round((matchedTokens / desiredTokens.length) * 60) : 0
+}
+
+function isVisible(element) {
+  if (!element || !element.isConnected) return false
+  const style = getView(element).getComputedStyle?.(element)
+  if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) return false
+  const rect = element.getBoundingClientRect?.()
+  return !rect || rect.width > 0 || rect.height > 0 || Boolean(element.textContent?.trim())
+}
+
+function getDropdownOptions(root = document) {
+  return DROPDOWN_OPTION_SELECTORS
+    .flatMap((selector) => Array.from(root.querySelectorAll(selector)))
+    .filter((option, index, options) => options.indexOf(option) === index)
+    .filter((option) => isVisible(option) && option.textContent?.trim())
+}
+
+export async function waitForDropdown(root = document, timeoutMs = DROPDOWN_TIMEOUT_MS) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const options = getDropdownOptions(root)
+    if (options.length > 0) return options
+    await delay(DROPDOWN_POLL_MS)
+  }
+
+  return []
+}
+
+function findBestOption(options, value) {
+  return options
+    .map((option) => ({
+      option,
+      score: scoreOption(option.textContent || option.getAttribute('aria-label') || '', value),
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((first, second) => second.score - first.score)[0]?.option || null
+}
+
+function findComboboxInput(element) {
+  if (!element) return null
+  if (element.matches?.('input, textarea')) return element
+  const input = element.querySelector?.('input, textarea, [contenteditable="true"]')
+  if (input) return input
+
+  const controls = element.getAttribute?.('aria-controls')
+  if (!controls) return null
+
+  return element.ownerDocument
+    .getElementById(controls)
+    ?.querySelector?.('input, textarea, [contenteditable="true"]') || null
+}
+
+function hasBlockingValidation(element) {
+  if (element.getAttribute?.('aria-invalid') === 'true') return true
+
+  const describedBy = element.getAttribute?.('aria-describedby')
+  if (describedBy) {
+    const hasDescribedError = describedBy
+      .split(/\s+/)
+      .some((id) => {
+        const node = element.ownerDocument.getElementById(id)
+        return node && isVisible(node) && VALIDATION_PATTERNS.some((pattern) => pattern.test(node.textContent || ''))
+      })
+    if (hasDescribedError) return true
+  }
+
+  const container = element.closest?.('label, div, section, form') || element.ownerDocument.body
+  const validationText = container?.textContent || ''
+  return VALIDATION_PATTERNS.some((pattern) => pattern.test(validationText)) && element.getAttribute?.('aria-invalid') === 'true'
+}
+
+function verifySelection(element, value) {
+  if (hasBlockingValidation(element)) return false
+
+  const text = [
+    element.value || '',
+    element.textContent || '',
+    element.getAttribute?.('aria-label') || '',
+  ].join(' ')
+
+  const desired = normalize(value)
+  return !desired || normalize(text).includes(desired)
+}
+
+// ---------------------------------------------------------------------------
+// Per-type fill handlers
+// ---------------------------------------------------------------------------
+
+function fillTextInput(element, value) {
+  focusElement(element)
+  setNativeValue(element, value)
+  dispatchInputEvents(element)
+  blurElement(element)
+  return true
+}
+
+function fillNativeSelect(element, value) {
   if (!value) return false
 
-  const needle = value.trim().toLowerCase()
   const options = Array.from(element.options)
-
-  const match = options.find(
-    (opt) =>
-      opt.value.toLowerCase() === needle ||
-      opt.textContent.trim().toLowerCase() === needle,
-  )
-
+  const match = findBestOption(options, value)
   if (!match) return false
 
   element.value = match.value
   dispatchInputEvents(element)
-  return true
+  return element.value === match.value
 }
 
-/**
- * Set a checkbox to checked / unchecked.
- * `value` is coerced to boolean — truthy = checked.
- */
 function fillCheckbox(element, value) {
   const desired = Boolean(value)
   if (element.checked !== desired) {
-    element.checked = desired
-    element.dispatchEvent(new Event('click', { bubbles: true }))
+    clickLikeUser(element)
+    if (element.checked !== desired) {
+      element.checked = desired
+    }
     dispatchInputEvents(element)
   }
   return true
+}
+
+async function keyboardSelect(element) {
+  dispatchKeyboardEvent(element, 'keydown', 'ArrowDown')
+  dispatchKeyboardEvent(element, 'keyup', 'ArrowDown')
+  await delay(50)
+  dispatchKeyboardEvent(element, 'keydown', 'Enter')
+  dispatchKeyboardEvent(element, 'keyup', 'Enter')
+  await delay(100)
+}
+
+async function fillAutocomplete(element, value) {
+  const input = findComboboxInput(element)
+  const interactionTarget = input || element
+  const maxAttempts = input ? MAX_DROPDOWN_RETRIES : 1
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    focusElement(interactionTarget)
+    clickLikeUser(interactionTarget)
+
+    if (input) {
+      await typeHuman(input, value)
+    } else {
+      for (const char of String(value)) {
+        dispatchKeyboardEvent(interactionTarget, 'keydown', char)
+        dispatchKeyboardEvent(interactionTarget, 'keypress', char)
+        dispatchKeyboardEvent(interactionTarget, 'keyup', char)
+      }
+    }
+
+    const options = await waitForDropdown(element.ownerDocument)
+    const bestOption = findBestOption(options, value)
+
+    if (bestOption && attempt !== 2) {
+      clickLikeUser(bestOption)
+      await delay(150)
+      if (verifySelection(input || element, value)) return true
+    }
+
+    await keyboardSelect(interactionTarget)
+    if (verifySelection(input || element, value)) return true
+
+    if (attempt === maxAttempts && bestOption) {
+      focusElement(interactionTarget)
+      clickLikeUser(interactionTarget)
+      clickLikeUser(bestOption)
+      await delay(150)
+      if (verifySelection(input || element, value)) return true
+    }
+  }
+
+  return false
 }
 
 // ---------------------------------------------------------------------------
 // Profile ↔ Field mapping
 // ---------------------------------------------------------------------------
 
-/**
- * Map from profile keys → detected-field categories.
- * Order matters – fields are filled in this order.
- */
 const PROFILE_FIELD_MAP = [
   { profileKey: 'personal.firstName', fieldCategory: 'firstName' },
   { profileKey: 'personal.lastName', fieldCategory: 'lastName' },
@@ -155,31 +442,30 @@ function getLegacyProfileValue(profile, path) {
 // Public API
 // ---------------------------------------------------------------------------
 
-/**
- * Fill a single DOM element with the given value, choosing the right
- * strategy based on element type.  Returns `true` when a value was written.
- */
-export function fillField(element, value) {
+export async function fillField(element, value) {
   if (!element?.isConnected) return false
   if (value === undefined || value === null) return false
 
   const tag = element.tagName.toLowerCase()
+  const fieldType = detectFieldType(element)
 
   try {
-    if (tag === 'select') {
-      return fillSelect(element, String(value))
+    if (fieldType === 'native-select') {
+      return fillNativeSelect(element, String(value))
     }
 
     if (tag === 'input' && element.type === 'checkbox') {
       return fillCheckbox(element, value)
     }
 
-    if (tag === 'textarea' || tag === 'input') {
-      fillTextInput(element, String(value))
-      return true
+    if (fieldType === 'combobox' || fieldType === 'autocomplete' || fieldType === 'custom-select') {
+      return fillAutocomplete(element, String(value))
     }
 
-    // Unknown element type — skip safely
+    if (fieldType === 'textarea' || tag === 'input') {
+      return fillTextInput(element, String(value))
+    }
+
     console.warn('ApplyFlow: Skipping unsupported element', tag, element)
     return false
   } catch (err) {
@@ -188,18 +474,7 @@ export function fillField(element, value) {
   }
 }
 
-/**
- * Run the full autofill pipeline:
- *  1. Walk the PROFILE_FIELD_MAP.
- *  2. For each profile key that has a value, try filling the first
- *     matching detected field.
- *  3. Return a summary with the count of filled fields.
- *
- * @param {object} profile  – Saved profile data  { name, email, phone, linkedin }
- * @param {object} fields   – Output of `detectFormFields()`
- * @returns {{ filledCount: number, skippedCount: number, details: Array }}
- */
-export function autofillFromProfile(profile, fields) {
+export async function autofillFromProfile(profile, fields) {
   const details = []
   let filledCount = 0
   let skippedCount = 0
@@ -214,9 +489,8 @@ export function autofillFromProfile(profile, fields) {
       continue
     }
 
-    // Fill the first matching candidate
     const target = candidates[0]
-    const filled = fillField(target.element, value)
+    const filled = await fillField(target.element, value)
 
     if (filled) {
       filledCount += 1
@@ -230,15 +504,6 @@ export function autofillFromProfile(profile, fields) {
   return { filledCount, skippedCount, details }
 }
 
-/**
- * Attempt to auto-select relevant options for any <select> elements
- * using heuristics (e.g. matching profile country, gender, etc.).
- * Fills only selects whose labels match known mappings.
- *
- * @param {Array} selectFields – `fields.select` from `detectFormFields()`
- * @param {object} profile     – Saved profile data
- * @returns {number} Number of selects filled
- */
 function getAssociatedLabelText(element) {
   if (element.id) {
     const label = document.querySelector(`label[for="${element.id}"]`)
@@ -250,6 +515,7 @@ function getAssociatedLabelText(element) {
 
   return ''
 }
+
 function selectHasExactProfileValue(element, profile) {
   const candidates = [
     profile?.name,
@@ -274,19 +540,16 @@ function selectHasExactProfileValue(element, profile) {
     ...(profile?.professional?.skills || []),
   ]
     .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
-    .map((value) => String(value).trim().toLowerCase())
 
-  for (const option of element.options) {
-    const optionValue = String(option.value || option.textContent || '').trim().toLowerCase()
-    if (candidates.includes(optionValue)) {
-      return optionValue
-    }
-  }
+  const options = Array.from(element.options)
+  const match = candidates
+    .map((candidate) => findBestOption(options, candidate))
+    .find(Boolean)
 
-  return null
+  return match?.textContent || match?.value || null
 }
 
-export function autofillSelects(selectFields, profile) {
+export async function autofillSelects(selectFields, profile) {
   let filled = 0
 
   for (const sel of selectFields) {
@@ -298,35 +561,34 @@ export function autofillSelects(selectFields, profile) {
     const phone = profile?.personal?.phone || profile?.phone
 
     if (text.includes('phone') && phone) {
-      // Phone country-code selects — skip, handled by phone input
       continue
     }
 
     const matchingValue = selectHasExactProfileValue(sel.element, profile)
 
-    if (matchingValue && fillField(sel.element, matchingValue)) {
+    if (matchingValue && await fillField(sel.element, matchingValue)) {
       filled += 1
       continue
     }
 
     const contactMode = text.includes('contact') || text.includes('preferred method')
     if (contactMode && email) {
-      if (fillField(sel.element, 'Email')) {
+      if (await fillField(sel.element, 'Email')) {
         filled += 1
         continue
       }
-      if (fillField(sel.element, 'email')) {
+      if (await fillField(sel.element, 'email')) {
         filled += 1
         continue
       }
     }
 
     if (contactMode && phone) {
-      if (fillField(sel.element, 'Phone')) {
+      if (await fillField(sel.element, 'Phone')) {
         filled += 1
         continue
       }
-      if (fillField(sel.element, 'phone')) {
+      if (await fillField(sel.element, 'phone')) {
         filled += 1
         continue
       }
@@ -336,14 +598,7 @@ export function autofillSelects(selectFields, profile) {
   return filled
 }
 
-/**
- * Check consent / agreement checkboxes that are commonly required
- * on application forms (e.g. privacy policy, data processing).
- *
- * @param {Array} checkboxFields – `fields.checkbox` from `detectFormFields()`
- * @returns {number} Number of checkboxes checked
- */
-export function autofillCheckboxes(checkboxFields) {
+export async function autofillCheckboxes(checkboxFields) {
   let filled = 0
 
   for (const cb of checkboxFields) {
@@ -356,7 +611,6 @@ export function autofillCheckboxes(checkboxFields) {
       .join(' ')
       .toLowerCase()
 
-    // Only auto-check consent / agreement / acknowledgement boxes
     const isConsent =
       text.includes('consent') ||
       text.includes('agree') ||
@@ -367,7 +621,7 @@ export function autofillCheckboxes(checkboxFields) {
       text.includes('authorization')
 
     if (isConsent && !cb.element.checked) {
-      if (fillField(cb.element, true)) {
+      if (await fillField(cb.element, true)) {
         filled += 1
       }
     }
@@ -376,9 +630,6 @@ export function autofillCheckboxes(checkboxFields) {
   return filled
 }
 
-/**
- * Get visible label text for a checkbox.
- */
 function getCheckboxLabelText(element) {
   if (element.id) {
     const label = document.querySelector(`label[for="${element.id}"]`)

@@ -57,9 +57,9 @@ test('Autofill fills Greenhouse-style fields and preserves dynamic form events',
   }
 
   const fields = detectFormFields()
-  const result = autofillFromProfile(profile, fields)
-  const selectsFilled = autofillSelects(fields.select, profile)
-  const checkboxesFilled = autofillCheckboxes(fields.checkbox)
+  const result = await autofillFromProfile(profile, fields)
+  const selectsFilled = await autofillSelects(fields.select, profile)
+  const checkboxesFilled = await autofillCheckboxes(fields.checkbox)
 
   assert.equal(result.filledCount, 3)
   assert.equal(selectsFilled, 1)
@@ -82,12 +82,12 @@ test('Autofill fills Greenhouse-style fields and preserves dynamic form events',
   textarea.addEventListener('input', () => {
     textAreaUpdated = true
   })
-  fillField(textarea, 'Hello, I am excited to apply.')
+  await fillField(textarea, 'Hello, I am excited to apply.')
   assert.equal(textarea.value, 'Hello, I am excited to apply.')
   assert.equal(textAreaUpdated, true)
 })
 
-test('Autofill detects Lever-style fields and skips unknown elements safely', () => {
+test('Autofill detects Lever-style fields and skips unknown elements safely', async () => {
   setupDom(`
     <label for="full_name">Name</label>
     <input id="full_name" name="full_name" type="text" placeholder="Your name" />
@@ -106,15 +106,15 @@ test('Autofill detects Lever-style fields and skips unknown elements safely', ()
   }
 
   const fields = detectFormFields()
-  const result = autofillFromProfile(profile, fields)
+  const result = await autofillFromProfile(profile, fields)
 
   assert.equal(result.filledCount, 3)
   assert.ok(result.skippedCount >= 1)
   assert.equal(result.details.some((detail) => detail.field === 'linkedin' && detail.status === 'skipped'), true)
-  assert.equal(fillField(document.getElementById('unknown-field'), 'ignored'), false)
+  assert.equal(await fillField(document.getElementById('unknown-field'), 'ignored'), false)
 })
 
-test('Autofill maps nested profile fields to detailed application fields', () => {
+test('Autofill maps nested profile fields to detailed application fields', async () => {
   setupDom(`
     <label for="first_name">First Name</label>
     <input id="first_name" name="first_name" type="text" />
@@ -168,7 +168,7 @@ test('Autofill maps nested profile fields to detailed application fields', () =>
   }
 
   const fields = detectFormFields()
-  const result = autofillFromProfile(profile, fields)
+  const result = await autofillFromProfile(profile, fields)
 
   assert.equal(result.filledCount, 12)
   assert.equal(document.getElementById('first_name').value, 'Nia')
@@ -180,7 +180,7 @@ test('Autofill maps nested profile fields to detailed application fields', () =>
   assert.equal(document.getElementById('current_company').value, 'ApplyFlow Labs')
 })
 
-test('Dropdown selections apply correctly with visible text matching', () => {
+test('Dropdown selections apply correctly with visible text matching', async () => {
   setupDom(`
     <label for="preferred_contact">Preferred contact</label>
     <select id="preferred_contact" name="preferred_contact" aria-label="Preferred contact method">
@@ -196,12 +196,12 @@ test('Dropdown selections apply correctly with visible text matching', () => {
     changeFired = true
   })
 
-  assert.equal(fillField(select, 'Email'), true)
+  assert.equal(await fillField(select, 'Email'), true)
   assert.equal(select.value, 'Email')
   assert.equal(changeFired, true)
 })
 
-test('Textareas populate correctly and emit input events', () => {
+test('Textareas populate correctly and emit input events', async () => {
   setupDom(`
     <textarea id="cover_story" name="cover_story" placeholder="Tell us about yourself"></textarea>
   `)
@@ -212,12 +212,12 @@ test('Textareas populate correctly and emit input events', () => {
     inputEvents += 1
   })
 
-  assert.equal(fillField(textarea, 'My experience is a strong fit.'), true)
+  assert.equal(await fillField(textarea, 'My experience is a strong fit.'), true)
   assert.equal(textarea.value, 'My experience is a strong fit.')
   assert.equal(inputEvents, 1)
 })
 
-test('Autofill remains stable after page refresh simulation and repeated attempts', () => {
+test('Autofill remains stable after page refresh simulation and repeated attempts', async () => {
   setupDom(`
     <label for="candidate_name">Name</label>
     <input id="candidate_name" name="candidate_name" type="text" />
@@ -233,7 +233,7 @@ test('Autofill remains stable after page refresh simulation and repeated attempt
   }
 
   const firstFields = detectFormFields()
-  const firstResult = autofillFromProfile(profile, firstFields)
+  const firstResult = await autofillFromProfile(profile, firstFields)
   assert.equal(firstResult.filledCount, 2)
 
   document.body.innerHTML = ''
@@ -245,7 +245,34 @@ test('Autofill remains stable after page refresh simulation and repeated attempt
   `)
 
   const secondFields = detectFormFields()
-  const secondResult = autofillFromProfile(profile, secondFields)
+  const secondResult = await autofillFromProfile(profile, secondFields)
   assert.equal(secondResult.filledCount, 2)
   assert.deepEqual(firstResult, secondResult)
+})
+
+test('Custom combobox without an input selects an option without native value crashes', async () => {
+  setupDom(`
+    <div id="country" role="combobox" aria-label="Country" tabindex="0">Select a country</div>
+    <ul role="listbox" hidden>
+      <li role="option">India</li>
+      <li role="option">United States</li>
+    </ul>
+  `)
+
+  const combobox = document.getElementById('country')
+  const listbox = document.querySelector('[role="listbox"]')
+
+  combobox.addEventListener('click', () => {
+    listbox.hidden = false
+  })
+
+  document.querySelectorAll('[role="option"]').forEach((option) => {
+    option.addEventListener('click', () => {
+      combobox.textContent = option.textContent
+      listbox.hidden = true
+    })
+  })
+
+  assert.equal(await fillField(combobox, 'India'), true)
+  assert.equal(combobox.textContent, 'India')
 })

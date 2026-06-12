@@ -88,9 +88,9 @@ export async function handleAutofill() {
 
     console.log('ApplyFlow: Starting autofill with detected fields:', { fieldCount, fields: fieldsLog })
 
-    const result = autofillFromProfile(profile, fields)
-    const selectsFilled = autofillSelects(fields.select, profile)
-    const checkboxesFilled = autofillCheckboxes(fields.checkbox)
+    const result = await autofillFromProfile(profile, fields)
+    const selectsFilled = await autofillSelects(fields.select, profile)
+    const checkboxesFilled = await autofillCheckboxes(fields.checkbox)
     const totalFilled = result.filledCount + selectsFilled + checkboxesFilled
     const metadata = extractPageMetadata()
 

@@ -58,17 +58,22 @@ export function toLocationCity(value, countryCode, stateCode) {
 }
 
 export function normalizePhoneForCountry(value, countryCode) {
-  if (!value || !countryCode) return null
+  if (!value) return null
 
+  const countryCodeInput = typeof value === 'object' ? value.countryCode : undefined
   const rawValue = typeof value === 'object'
-    ? value.e164 || value.nationalNumber
+    ? value.e164 || (value.countryCode && value.nationalNumber
+      ? `${value.countryCode.startsWith('+') ? value.countryCode : `+${value.countryCode}`}${value.nationalNumber}`
+      : value.nationalNumber)
     : value
   const text = String(rawValue || '').trim()
 
   if (!text) return null
 
-  const parsed = parsePhoneNumberFromString(text, countryCode)
-  if (!parsed || !parsed.isValid() || parsed.country !== countryCode) return null
+  const parsed = countryCodeInput
+    ? parsePhoneNumberFromString(text)
+    : parsePhoneNumberFromString(text, countryCode)
+  if (!parsed || !parsed.isValid()) return null
 
   return {
     countryCode: `+${parsed.countryCallingCode}`,
@@ -176,12 +181,17 @@ export const profileSchema = z.object({
     return
   }
 
-  if (parsedPhone.country !== location.country.code) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Phone number does not match selected country (${location.country.name}).`,
-      path: ['phone'],
-    })
+  const providedPhoneCode = phone.countryCode?.trim()
+  if (providedPhoneCode) {
+    const normalizedProvided = providedPhoneCode.replace(/^\+/, '')
+    if (normalizedProvided !== String(parsedPhone.countryCallingCode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Phone country code does not match the phone number.',
+        path: ['phone'],
+      })
+      return
+    }
   }
 })
 

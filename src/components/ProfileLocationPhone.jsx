@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Country, State, City } from 'country-state-city'
 import { getCountryCallingCode, parsePhoneNumberFromString } from 'libphonenumber-js'
+
+// Utility to get flag emoji for country code
+function getCountryFlag(countryCode) {
+  if (!countryCode || countryCode.length !== 2) return '🌍'
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map((char) => 127397 + char.charCodeAt())
+  return String.fromCodePoint(...codePoints)
+}
 
 export default function ProfileLocationPhone({
   disabled,
@@ -8,24 +18,69 @@ export default function ProfileLocationPhone({
   onChange,
   profile,
 }) {
-  const [countryCode, setCountryCode] = useState(profile?.location?.country?.code || '')
-  const [stateCode, setStateCode] = useState(profile?.location?.state?.code || '')
-  const [cityName, setCityName] = useState(profile?.location?.city?.name || '')
-  const [phoneNumber, setPhoneNumber] = useState(profile?.personal?.phone?.nationalNumber || '')
+  const [showPhoneCountryDropdown, setShowPhoneCountryDropdown] = useState(false)
+  const [phoneCountrySearch, setPhoneCountrySearch] = useState('')
 
-  useEffect(() => {
-    setCountryCode(profile?.location?.country?.code || '')
-    setStateCode(profile?.location?.state?.code || '')
-    setCityName(profile?.location?.city?.name || '')
-    setPhoneNumber(profile?.personal?.phone?.nationalNumber || '')
-  }, [
-    profile?.location?.country?.code,
-    profile?.location?.state?.code,
-    profile?.location?.city?.name,
-    profile?.personal?.phone?.nationalNumber,
-  ])
+  const countryCode = profile?.location?.country?.code || ''
+  const stateCode = profile?.location?.state?.code || ''
+  const cityName = profile?.location?.city?.name || ''
+  // Some countries (e.g. AQ) don't have dialing codes in libphonenumber-js
+  // and calling getCountryCallingCode will throw. Provide a safe lookup.
+  const safeGetDialingCode = (iso) => {
+    try {
+      const code = getCountryCallingCode(iso)
+      return code ? `+${code}` : ''
+    } catch {
+      return ''
+    }
+  }
+
+  const phoneCountryCode = profile?.personal?.phone?.countryCode || (countryCode ? safeGetDialingCode(countryCode) : '')
+  const phoneNumber = profile?.personal?.phone?.nationalNumber || ''
 
   const countries = useMemo(() => Country.getAllCountries(), [])
+  
+  // Get country name from phone country code
+  const phoneCountryInfo = useMemo(() => {
+    if (!phoneCountryCode) return null
+    const code = phoneCountryCode.replace(/^\+/, '')
+    for (const country of countries) {
+      try {
+        if (String(getCountryCallingCode(country.isoCode)) === code) {
+          return { code: country.isoCode, name: country.name }
+        }
+      } catch {
+        // ignore countries without dialing codes
+      }
+    }
+    return null
+  }, [phoneCountryCode, countries])
+
+  // All countries with their dialing codes for the phone picker
+  const phoneCountriesList = useMemo(() => {
+    return countries
+      .map((country) => {
+        const dialing = safeGetDialingCode(country.isoCode)
+        return {
+          isoCode: country.isoCode,
+          name: country.name,
+          dialingCode: dialing,
+          flag: getCountryFlag(country.isoCode),
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [countries])
+
+  // Filter countries based on search
+  const filteredPhoneCountries = useMemo(() => {
+    if (!phoneCountrySearch) return phoneCountriesList
+    const search = phoneCountrySearch.toLowerCase()
+    return phoneCountriesList.filter((c) =>
+      c.name.toLowerCase().includes(search) ||
+      c.dialingCode.includes(search)
+    )
+  }, [phoneCountriesList, phoneCountrySearch])
+
   const availableStates = useMemo(
     () => (countryCode ? State.getStatesOfCountry(countryCode) : []),
     [countryCode],
@@ -35,16 +90,21 @@ export default function ProfileLocationPhone({
     [countryCode, stateCode],
   )
 
-  const publishChange = (nextCountryCode, nextStateCode, nextCityName, nextPhoneNumber) => {
+  const publishChange = (nextCountryCode, nextStateCode, nextCityName, nextPhoneCountryCode, nextPhoneNumber) => {
     const countryData = nextCountryCode ? Country.getCountryByCode(nextCountryCode) : null
     const stateData = nextCountryCode && nextStateCode
       ? State.getStateByCodeAndCountry(nextStateCode, nextCountryCode)
       : null
 
     let phoneData = null
-    if (nextCountryCode && nextPhoneNumber) {
-      const parsed = parsePhoneNumberFromString(nextPhoneNumber, nextCountryCode)
-      if (parsed?.isValid() && parsed.country === nextCountryCode) {
+    if (nextPhoneNumber) {
+      const normalizedPhoneCode = nextPhoneCountryCode?.trim() || ''
+      const phoneValue = normalizedPhoneCode
+        ? `${normalizedPhoneCode.startsWith('+') ? normalizedPhoneCode : `+${normalizedPhoneCode}`}${nextPhoneNumber.trim()}`
+        : nextPhoneNumber.trim()
+      const parsed = parsePhoneNumberFromString(phoneValue, nextPhoneCountryCode ? undefined : nextCountryCode)
+
+      if (parsed?.isValid()) {
         phoneData = {
           countryCode: `+${parsed.countryCallingCode}`,
           nationalNumber: parsed.nationalNumber,
@@ -66,32 +126,31 @@ export default function ProfileLocationPhone({
 
   const handleCountryChange = (event) => {
     const nextCountryCode = event.target.value
-    setCountryCode(nextCountryCode)
-    setStateCode('')
-    setCityName('')
-    publishChange(nextCountryCode, '', '', phoneNumber)
+    const nextPhoneCountryCode = phoneCountryCode || (nextCountryCode ? `+${getCountryCallingCode(nextCountryCode)}` : '')
+    publishChange(nextCountryCode, '', '', nextPhoneCountryCode, phoneNumber)
   }
 
   const handleStateChange = (event) => {
     const nextStateCode = event.target.value
-    setStateCode(nextStateCode)
-    setCityName('')
-    publishChange(countryCode, nextStateCode, '', phoneNumber)
+    publishChange(countryCode, nextStateCode, '', phoneCountryCode, phoneNumber)
   }
 
   const handleCityChange = (event) => {
     const nextCityName = event.target.value
-    setCityName(nextCityName)
-    publishChange(countryCode, stateCode, nextCityName, phoneNumber)
+    publishChange(countryCode, stateCode, nextCityName, phoneCountryCode, phoneNumber)
+  }
+
+  const handlePhoneCountryCodeChange = (dialingCode) => {
+    setShowPhoneCountryDropdown(false)
+    setPhoneCountrySearch('')
+    publishChange(countryCode, stateCode, cityName, dialingCode, phoneNumber)
   }
 
   const handlePhoneChange = (event) => {
     const nextPhoneNumber = event.target.value
-    setPhoneNumber(nextPhoneNumber)
-    publishChange(countryCode, stateCode, cityName, nextPhoneNumber)
+    publishChange(countryCode, stateCode, cityName, phoneCountryCode, nextPhoneNumber)
   }
 
-  const phonePrefix = countryCode ? `+${getCountryCallingCode(countryCode)}` : ''
   const controlClass = 'rounded-md border border-slate-200 px-3 py-1.5 text-sm font-normal outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50'
 
   return (
@@ -170,13 +229,70 @@ export default function ProfileLocationPhone({
       <label className="grid gap-1 text-sm font-medium" htmlFor="personal.phone">
         Phone
         <div className="flex items-center gap-2">
-          <span className="min-w-14 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-normal text-slate-600">
-            {phonePrefix}
-          </span>
+          {/* Country Code Picker */}
+          <div className="relative w-32">
+            <button
+              aria-expanded={showPhoneCountryDropdown}
+              aria-invalid={Boolean(errors['personal.phone'])}
+              className={`${controlClass} w-full text-left`}
+              disabled={disabled}
+              id="personal.phone.countryCode"
+              onClick={() => setShowPhoneCountryDropdown(!showPhoneCountryDropdown)}
+              type="button"
+            >
+              <span className="flex items-center justify-between">
+                <span className="truncate">
+                  {phoneCountryInfo
+                    ? `${getCountryFlag(phoneCountryInfo.code)} ${phoneCountryCode}`
+                    : '+1'}
+                </span>
+                <span className="text-xs">▼</span>
+              </span>
+            </button>
+
+            {showPhoneCountryDropdown && !disabled && (
+              <div className="absolute top-full z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                <input
+                  className={`${controlClass} sticky top-0 w-full border-b`}
+                  onChange={(e) => setPhoneCountrySearch(e.target.value)}
+                  placeholder="Search country..."
+                  type="text"
+                  value={phoneCountrySearch}
+                />
+                <div className="max-h-40 overflow-auto">
+                  {filteredPhoneCountries.map((country) => (
+                    <button
+                      className={`w-full px-3 py-2 text-left text-sm transition ${
+                        phoneCountryCode === country.dialingCode
+                          ? 'bg-slate-100 font-medium text-slate-900'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                      key={country.isoCode}
+                      onClick={() => handlePhoneCountryCodeChange(country.dialingCode)}
+                      type="button"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-base">{country.flag}</span>
+                        <span className="flex-1 truncate">{country.name}</span>
+                        <span className="text-xs text-slate-500">{country.dialingCode}</span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredPhoneCountries.length === 0 && (
+                    <div className="px-3 py-2 text-center text-sm text-slate-500">
+                      No countries found
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Phone Number Input */}
           <input
             aria-invalid={Boolean(errors['personal.phone'])}
             className={`${controlClass} min-w-0 flex-1`}
-            disabled={disabled || !countryCode}
+            disabled={disabled}
             id="personal.phone"
             name="personal.phone"
             onChange={handlePhoneChange}

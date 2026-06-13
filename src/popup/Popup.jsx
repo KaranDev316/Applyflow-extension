@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, Suspense, lazy } from 'react'
 import ApplicationList from '../components/ApplicationList'
 import JobMetadata from '../components/JobMetadata'
 import PlatformStatus from '../components/PlatformStatus'
-import ProfileForm from '../components/ProfileForm'
+import ErrorBoundary from '../components/ErrorBoundary'
+const ProfileForm = lazy(() => import('../components/ProfileForm'))
 import SmartAutofill from '../components/SmartAutofill'
 import { useApplicationHistory } from '../hooks/useApplicationHistory'
 import { useAutofill } from '../hooks/useAutofill'
@@ -114,17 +115,22 @@ function Popup() {
 
       {activeTab === 'Profile' && (
         <div className="mt-4">
-          <ProfileForm
-            isLoading={profileState.isLoadingProfile}
-            isSaved={profileState.isSaved}
-            isSaving={profileState.isSaving}
-            loadError={profileState.loadError}
-            onFieldChange={profileState.handleFieldChange}
-            onSubmit={profileState.handleSubmit}
-            profile={profileState.profile}
-            saveError={profileState.saveError}
-            validationErrors={profileState.validationErrors}
-          />
+          <Suspense fallback={<p className="text-sm text-slate-500">Loading profile…</p>}>
+            <ErrorBoundary>
+              <ProfileForm
+                isLoading={profileState.isLoadingProfile}
+                isSaved={profileState.isSaved}
+                isSaving={profileState.isSaving}
+                loadError={profileState.loadError}
+                onFieldChange={profileState.handleFieldChange}
+                onLocationPhoneChange={profileState.handleLocationPhoneChange}
+                onSubmit={profileState.handleSubmit}
+                profile={profileState.profile}
+                saveError={profileState.saveError}
+                validationErrors={profileState.validationErrors}
+              />
+            </ErrorBoundary>
+          </Suspense>
         </div>
       )}
 

@@ -1,3 +1,4 @@
+/* global describe,it,expect */
 import { profileSchema } from './profileValidation'
 
 describe('Profile Validation Schema', () => {
@@ -55,8 +56,8 @@ describe('Profile Validation Schema', () => {
     expect(cityIssue.message).toBe('Ahmedabad does not belong to Maharashtra.')
   })
 
-  it('fails when phone number does not match the selected country', () => {
-    const invalidPhoneData = {
+  it('passes when phone country code differs from location country', () => {
+    const validPhoneData = {
       location: {
         country: { code: 'IN', name: 'India' },
         state: null,
@@ -68,12 +69,30 @@ describe('Profile Validation Schema', () => {
         e164: '+12025550173', // A US phone number
       },
     }
-    
+
+    const result = profileSchema.safeParse(validPhoneData)
+    expect(result.success).toBe(true)
+  })
+
+  it('fails when phone country code does not match the phone number', () => {
+    const invalidPhoneData = {
+      location: {
+        country: { code: 'IN', name: 'India' },
+        state: null,
+        city: null,
+      },
+      phone: {
+        countryCode: '+44',
+        nationalNumber: '2025550173',
+        e164: '+12025550173',
+      },
+    }
+
     const result = profileSchema.safeParse(invalidPhoneData)
     expect(result.success).toBe(false)
-    
+
     const phoneIssue = result.error.issues.find(issue => issue.path.includes('phone'))
     expect(phoneIssue).toBeDefined()
-    expect(phoneIssue.message).toBe('Phone number does not match selected country (India).')
+    expect(phoneIssue.message).toBe('Phone country code does not match the phone number.')
   })
 })

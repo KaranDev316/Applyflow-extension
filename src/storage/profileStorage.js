@@ -232,17 +232,7 @@ export async function saveProfile(profile) {
   }
 
   const normalizedProfile = normalizeProfile(profile)
-  // If saving a legacy flat profile (no nested location), convert empty/null location fields
-  // to empty strings for storage compatibility and tests.
   const isFlatInput = Boolean(profile && (profile.name || profile.email || profile.phone || profile.linkedin))
-  if (isFlatInput && !profile.location) {
-    normalizedProfile.location = {
-      ...normalizedProfile.location,
-      city: normalizedProfile.location.city ?? '',
-      state: normalizedProfile.location.state ?? '',
-      country: normalizedProfile.location.country ?? '',
-    }
-  }
   const validationErrors = validateProfile(normalizedProfile)
 
   if (Object.keys(validationErrors).length > 0) {
@@ -252,15 +242,47 @@ export async function saveProfile(profile) {
   }
 
   return new Promise((resolve, reject) => {
-    storage.set({ profile: normalizedProfile }, () => {
-      const error = getLastError()
-
-      if (error) {
-        reject(new Error(error.message))
+    // Check whether an existing stored profile is present. If none exists
+    // (first-time save of a flat profile) preserve empty-string location
+    // fields for compatibility. If an existing profile exists (editing),
+    // keep location fields as nulls.
+    storage.get('profile', (result) => {
+      const getError = getLastError()
+      if (getError) {
+        reject(new Error(getError.message))
         return
       }
 
-      resolve()
+      const existing = result?.profile
+
+      if (isFlatInput && !profile.location) {
+        if (!existing) {
+          normalizedProfile.location = {
+            ...normalizedProfile.location,
+            city: normalizedProfile.location.city ?? '',
+            state: normalizedProfile.location.state ?? '',
+            country: normalizedProfile.location.country ?? '',
+          }
+        } else {
+          normalizedProfile.location = {
+            ...normalizedProfile.location,
+            city: normalizedProfile.location.city ?? null,
+            state: normalizedProfile.location.state ?? null,
+            country: normalizedProfile.location.country ?? null,
+          }
+        }
+      }
+
+      storage.set({ profile: normalizedProfile }, () => {
+        const setError = getLastError()
+
+        if (setError) {
+          reject(new Error(setError.message))
+          return
+        }
+
+        resolve()
+      })
     })
   })
 }

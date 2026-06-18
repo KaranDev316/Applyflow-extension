@@ -41,6 +41,13 @@ const sections = [
       { id: 'social.website', label: 'Website', type: 'url' },
     ],
   },
+  {
+    title: 'Application Preferences',
+    description: 'Used to answer common application questions such as "Why do you want to work here?" and "What excites you about this opportunity?"',
+    fields: [
+      { id: 'application.motivationStatement', label: 'Motivation Statement', type: 'textarea' },
+    ],
+  },
 ]
 
 function getFieldValue(profile, fieldId) {
@@ -98,6 +105,9 @@ function ProfileForm({
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
             {section.title}
           </h2>
+          {section.description && (
+            <p className="text-xs text-slate-500">{section.description}</p>
+          )}
           {section.fields.map((field) => (
             <ProfileInput
               disabled={isLoading}

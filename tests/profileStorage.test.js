@@ -84,6 +84,9 @@ const migratedAdaProfile = {
     portfolio: '',
     website: '',
   },
+  application: {
+    motivationStatement: '',
+  },
 }
 
 test('saving profile persists after browser restart', async () => {

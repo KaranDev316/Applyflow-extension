@@ -10,6 +10,20 @@
 // ---------------------------------------------------------------------------
 
 const FIELD_KEYWORDS = {
+  motivationStatement: [
+    'why do you want',
+    'why are you interested',
+    'what excites you',
+    'why this role',
+    'why this company',
+    'why do you want to work here',
+    'career goals',
+    'motivation',
+    'why greenhouse',
+    'why apply',
+    'why are you applying',
+    'why should we hire you',
+  ],
   preferredFirstName: ['preferred first name', 'preferred name', 'chosen name', 'nickname'],
   preferredLastName: ['preferred last name', 'preferred surname', 'preferred family name'],
   firstName: ['legal first name', 'first name', 'firstname', 'first_name', 'given name', 'given_name', 'forename'],
@@ -95,7 +109,7 @@ function buildFieldInfo(element) {
 /**
  * Detect all relevant form fields on the current page.
  *
- * @returns {{ name: Array, preferredFirstName: Array, preferredLastName: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
+ * @returns {{ name: Array, motivationStatement: Array, preferredFirstName: Array, preferredLastName: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
  *             address: Array, city: Array, state: Array, country: Array, postalCode: Array,
  *             linkedin: Array, github: Array, portfolio: Array, website: Array, currentCompany: Array,
  *             resume: Array, textarea: Array, select: Array, checkbox: Array }}
@@ -103,6 +117,7 @@ function buildFieldInfo(element) {
 export function detectFormFields() {
   const fields = {
     name: [],
+    motivationStatement: [],
     preferredFirstName: [],
     preferredLastName: [],
     firstName: [],
@@ -178,6 +193,8 @@ export function detectFormFields() {
       fields.portfolio.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.website)) {
       fields.website.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.motivationStatement)) {
+      fields.motivationStatement.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.currentCompany)) {
       fields.currentCompany.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.name)) {
@@ -188,8 +205,13 @@ export function detectFormFields() {
   // --- Textareas ---
   const textareas = document.querySelectorAll('textarea')
   textareas.forEach((ta) => {
+    const text = getSearchableText(ta)
     const info = buildFieldInfo(ta)
-    fields.textarea.push(info)
+    if (matchesKeywords(text, FIELD_KEYWORDS.motivationStatement)) {
+      fields.motivationStatement.push(info)
+    } else {
+      fields.textarea.push(info)
+    }
   })
 
   // --- Select / Dropdown ---

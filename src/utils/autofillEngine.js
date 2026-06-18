@@ -402,6 +402,7 @@ async function fillAutocomplete(element, value) {
 // ---------------------------------------------------------------------------
 
 const PROFILE_FIELD_MAP = [
+  { profileKey: 'application.motivationStatement', fieldCategory: 'motivationStatement' },
   { profileKey: 'personal.preferredFirstName', fieldCategory: 'preferredFirstName' },
   { profileKey: 'personal.firstName', fieldCategory: 'firstName' },
   { profileKey: 'personal.lastName', fieldCategory: 'preferredLastName' },

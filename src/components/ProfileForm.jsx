@@ -9,7 +9,7 @@ const sections = [
     fields: [
       { id: 'personal.firstName', label: 'First Name', type: 'text' },
       { id: 'personal.lastName', label: 'Last Name', type: 'text' },
-      { id: 'personal.preferredName', label: 'Preferred Name', type: 'text' },
+      { id: 'personal.preferredFirstName', label: 'Preferred First Name', type: 'text' },
       { id: 'personal.email', label: 'Email', type: 'email' },
     ],
   },

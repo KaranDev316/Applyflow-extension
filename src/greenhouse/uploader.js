@@ -54,8 +54,18 @@ function createDataTransferWithFile(file) {
 function setFileInputFiles(input, file) {
   const dataTransfer = createDataTransferWithFile(file)
 
+  // Use the native setter to safely bypass React's internal state hijacking
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'files'
+  )?.set
+
   try {
-    input.files = dataTransfer.files
+    if (nativeSetter) {
+      nativeSetter.call(input, dataTransfer.files)
+    } else {
+      input.files = dataTransfer.files
+    }
   } catch (error) {
     Object.defineProperty(input, 'files', {
       value: dataTransfer.files,
@@ -66,7 +76,7 @@ function setFileInputFiles(input, file) {
 
 function dispatchInputEvents(input) {
   const eventOptions = { bubbles: true, cancelable: true }
-  input.dispatchEvent(new Event('input', eventOptions))
+  // Native file selects typically only fire 'change'. Firing 'input' can crash some uploaders.
   input.dispatchEvent(new Event('change', eventOptions))
 }
 

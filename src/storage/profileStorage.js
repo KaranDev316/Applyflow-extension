@@ -11,7 +11,7 @@ export const emptyProfile = {
   personal: {
     firstName: '',
     lastName: '',
-    preferredName: '',
+    preferredFirstName: '',
     email: '',
     phone: null,
   },
@@ -101,7 +101,7 @@ export function normalizeProfile(profile = {}) {
     personal: {
       firstName: trimValue(personal.firstName) || migratedName.firstName,
       lastName: trimValue(personal.lastName) || migratedName.lastName,
-      preferredName: trimValue(personal.preferredName),
+      preferredFirstName: trimValue(personal.preferredFirstName || personal.preferredName),
       email: trimValue(personal.email || profile.email),
       phone,
     },

@@ -58,7 +58,7 @@ const migratedAdaProfile = {
   personal: {
     firstName: 'Ada',
     lastName: 'Lovelace',
-    preferredName: '',
+    preferredFirstName: '',
     email: 'ada@example.com',
     phone: '555-0101',
   },

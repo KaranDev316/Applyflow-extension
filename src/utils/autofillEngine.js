@@ -402,7 +402,9 @@ async function fillAutocomplete(element, value) {
 // ---------------------------------------------------------------------------
 
 const PROFILE_FIELD_MAP = [
+  { profileKey: 'personal.preferredFirstName', fieldCategory: 'preferredFirstName' },
   { profileKey: 'personal.firstName', fieldCategory: 'firstName' },
+  { profileKey: 'personal.lastName', fieldCategory: 'preferredLastName' },
   { profileKey: 'personal.lastName', fieldCategory: 'lastName' },
   { profileKey: 'name', fieldCategory: 'name' },
   { profileKey: 'personal.email', fieldCategory: 'email' },
@@ -424,12 +426,17 @@ function getProfileValue(profile, path) {
     const legacyName = profile?.name
     if (legacyName) return legacyName
 
-    return [profile?.personal?.firstName, profile?.personal?.lastName]
+    return [profile?.personal?.preferredFirstName || profile?.personal?.firstName, profile?.personal?.lastName]
       .filter(Boolean)
       .join(' ')
   }
 
   let value = path.split('.').reduce((current, key) => current?.[key], profile)
+
+  // Fallback to legal first name if a preferred first name isn't set
+  if (path === 'personal.preferredFirstName' && !value) {
+    value = profile?.personal?.firstName
+  }
 
   // Handle structured validation objects for location and phone
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -534,7 +541,7 @@ function selectHasExactProfileValue(element, profile) {
     profile?.linkedin,
     profile?.personal?.firstName,
     profile?.personal?.lastName,
-    profile?.personal?.preferredName,
+    profile?.personal?.preferredFirstName,
     profile?.personal?.email,
     profile?.personal?.phone?.e164 || profile?.personal?.phone?.nationalNumber || profile?.personal?.phone,
     profile?.location?.address,

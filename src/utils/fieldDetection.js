@@ -10,8 +10,10 @@
 // ---------------------------------------------------------------------------
 
 const FIELD_KEYWORDS = {
-  firstName: ['first name', 'firstname', 'first_name', 'given name', 'given_name'],
-  lastName: ['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name'],
+  preferredFirstName: ['preferred first name', 'preferred name', 'chosen name', 'nickname'],
+  preferredLastName: ['preferred last name', 'preferred surname', 'preferred family name'],
+  firstName: ['legal first name', 'first name', 'firstname', 'first_name', 'given name', 'given_name', 'forename'],
+  lastName: ['legal last name', 'last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name'],
   name: ['name', 'full name', 'fullname', 'full_name'],
   email: ['email'],
   phone: ['phone', 'telephone', 'mobile'],
@@ -56,8 +58,8 @@ function getSearchableText(element) {
   return [
     element.name || '',
     element.id || '',
-    element.placeholder || '',
     getAssociatedLabel(element),
+    element.placeholder || '',
     element.getAttribute('aria-label') || '',
   ]
     .join(' ')
@@ -93,7 +95,7 @@ function buildFieldInfo(element) {
 /**
  * Detect all relevant form fields on the current page.
  *
- * @returns {{ name: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
+ * @returns {{ name: Array, preferredFirstName: Array, preferredLastName: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
  *             address: Array, city: Array, state: Array, country: Array, postalCode: Array,
  *             linkedin: Array, github: Array, portfolio: Array, website: Array, currentCompany: Array,
  *             resume: Array, textarea: Array, select: Array, checkbox: Array }}
@@ -101,6 +103,8 @@ function buildFieldInfo(element) {
 export function detectFormFields() {
   const fields = {
     name: [],
+    preferredFirstName: [],
+    preferredLastName: [],
     firstName: [],
     lastName: [],
     email: [],
@@ -148,6 +152,10 @@ export function detectFormFields() {
       fields.email.push(info)
     } else if (input.type === 'tel' || matchesKeywords(text, FIELD_KEYWORDS.phone)) {
       fields.phone.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.preferredFirstName)) {
+      fields.preferredFirstName.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.preferredLastName)) {
+      fields.preferredLastName.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.firstName)) {
       fields.firstName.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.lastName)) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import ProfileInput from './ProfileInput'
 import ProfileLocationPhone from './ProfileLocationPhone'
+import DocumentUpload from './DocumentUpload'
 
 const sections = [
   {
@@ -21,10 +22,7 @@ const sections = [
   },
   {
     title: 'Documents',
-    fields: [
-      { id: 'documents.resume', label: 'Resume', type: 'text' },
-      { id: 'documents.coverLetter', label: 'Cover Letter', type: 'text' },
-    ],
+    fields: [],
   },
   {
     title: 'Professional Information',
@@ -110,6 +108,11 @@ function ProfileForm({
               value={getFieldValue(profile, field.id)}
             />
           ))}
+
+          {section.title === 'Documents' && (
+            <DocumentUpload disabled={isLoading || isSaving} />
+          )}
+
           {section.title === 'Location' && (
             <ProfileLocationPhone
               disabled={isLoading}

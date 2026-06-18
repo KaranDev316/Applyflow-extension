@@ -19,15 +19,23 @@ export function usePlatformDetection() {
           setPlatformStatus(status)
         }
 
+        // Stop showing the detecting state as soon as we have platform status
+        if (isMounted) {
+          setIsDetectingPlatform(false)
+        }
+
+        // If supported, fetch metadata in background without blocking the UI
         if (status?.type === 'supported') {
-          try {
-            const metaResult = await extractMetadataFromPage()
-            if (isMounted && metaResult?.metadata) {
-              setJobMetadata(metaResult.metadata)
+          (async () => {
+            try {
+              const metaResult = await extractMetadataFromPage()
+              if (isMounted && metaResult?.metadata) {
+                setJobMetadata(metaResult.metadata)
+              }
+            } catch (metaError) {
+              console.warn('Failed to extract metadata:', metaError)
             }
-          } catch (metaError) {
-            console.warn('Failed to extract metadata:', metaError)
-          }
+          })()
         }
       } catch (error) {
         console.error('Failed to detect platform:', error)
@@ -39,10 +47,6 @@ export function usePlatformDetection() {
             name: null,
             supported: false,
           })
-        }
-      } finally {
-        if (isMounted) {
-          setIsDetectingPlatform(false)
         }
       }
     }

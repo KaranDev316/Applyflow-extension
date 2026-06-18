@@ -72,15 +72,20 @@ async function sendMessageToAnyFrame(tab, action, data = {}, preferredFrameIds =
       return response
     } catch (error) {
       lastError = error
-      console.warn('ApplyFlow popup: Content script frame did not respond', {
-        action,
-        tabId: tab.id,
-        frameId,
-        error: error.message || error,
-      })
 
       if (!isMissingReceiverError(error)) {
+        console.warn('ApplyFlow popup: Content script frame error', {
+          action,
+          tabId: tab.id,
+          frameId,
+          error: error.message || error,
+        })
         throw error
+      } else {
+        console.debug('ApplyFlow popup: Content script frame not ready', {
+          action,
+          frameId,
+        })
       }
     }
   }
@@ -154,10 +159,16 @@ export async function sendMessageToContentScript(action, data = {}) {
 
       const injectedFrameIds = await injectContentScriptIntoActiveTab(tab)
       
-      // Retry to allow async initialization (e.g., Vite dynamic imports) to complete
-      let retries = 5
+      if (!injectedFrameIds || injectedFrameIds.length === 0) {
+        throw new Error('Content script injection failed. This page may be restricted.')
+      }
+
+      // Retry to allow async initialization (e.g., Vite dynamic imports) to complete.
+      // Increase attempts and backoff so we avoid false negatives that prompt a user refresh.
+      let retries = 10
+      const delayMs = 300
       while (retries > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
         try {
           return await sendMessageToAnyFrame(tab, action, data, injectedFrameIds)
         } catch (err) {
@@ -167,7 +178,11 @@ export async function sendMessageToContentScript(action, data = {}) {
       }
     }
   } catch (error) {
-    console.error('Failed to send message to content script:', error)
+    if (!isMissingReceiverError(error)) {
+      console.error('Failed to send message to content script:', error)
+    } else {
+      console.warn('ApplyFlow popup: Could not establish connection to content script.', error.message)
+    }
     throw error
   }
 }
@@ -193,10 +208,36 @@ export async function injectContentScriptIntoActiveTab(activeTab) {
   const accessibleFrameIds = await getAccessibleFrameIds(tab.id)
   const injectedFrameIds = []
 
+  // Try injecting the declared content script files first
   for (const frameId of accessibleFrameIds) {
     const injected = await injectContentScriptIntoFrame(tab.id, frameId, files)
     if (injected) {
       injectedFrameIds.push(frameId)
+    }
+  }
+
+  // If none of the declared files injected successfully, attempt common built bundle fallback(s)
+  if (injectedFrameIds.length === 0) {
+    try {
+      const manifest = chrome.runtime.getManifest()
+      const war = manifest.web_accessible_resources || []
+      const warFiles = war.flatMap((w) => w.resources || [])
+      const fallbackCandidates = warFiles.filter((f) => /content(\.js)?$/i.test(f) || /content[-_]?.*\.js$/i.test(f))
+
+      if (fallbackCandidates.length > 0) {
+        console.log('ApplyFlow popup: Attempting fallback content script injection', { fallbackCandidates })
+        for (const frameId of accessibleFrameIds) {
+          for (const fb of fallbackCandidates) {
+            const injected = await injectContentScriptIntoFrame(tab.id, frameId, [fb])
+            if (injected) {
+              injectedFrameIds.push(frameId)
+              break
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('ApplyFlow popup: Fallback content script injection failed', err)
     }
   }
 
@@ -206,7 +247,7 @@ export async function injectContentScriptIntoActiveTab(activeTab) {
     injectedFrameIds,
   })
 
-  return injectedFrameIds.length > 0 ? injectedFrameIds : accessibleFrameIds
+  return injectedFrameIds
 }
 
 /**
@@ -246,7 +287,11 @@ export async function extractMetadataFromPage() {
     const response = await sendMessageToContentScript(MESSAGE_ACTIONS.EXTRACT_METADATA)
     return response
   } catch (error) {
-    console.error('Failed to extract metadata:', error)
+    if (!isMissingReceiverError(error)) {
+      console.error('Failed to extract metadata:', error)
+    } else {
+      console.warn('ApplyFlow popup: Could not extract metadata (content script missing).')
+    }
     return { success: false, metadata: { company: '', role: '' } }
   }
 }
@@ -266,7 +311,7 @@ export async function isContentScriptActive() {
     const response = await sendMessageToContentScript(MESSAGE_ACTIONS.PING)
     return response && response.success
   } catch (error) {
-    console.warn('ApplyFlow popup: Content script ping failed:', {
+    console.debug('ApplyFlow popup: Content script ping failed:', {
       name: error.name,
       message: error.message,
     })

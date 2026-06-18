@@ -10,6 +10,7 @@ export function useAutofill({
   const [autofillStatus, setAutofillStatus] = useState('idle')
   const [autofillMessage, setAutofillMessage] = useState('')
   const [isAutofilling, setIsAutofilling] = useState(false)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
   const autofillMessageTimeoutRef = useRef(null)
 
   useEffect(() => (
@@ -30,6 +31,16 @@ export function useAutofill({
   }
 
   const handleAutofill = async () => {
+    // If the bridge was broken on the last click, execute a programmatic reload now
+    if (needsRefresh) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.reload(tabs[0].id)
+        }
+      })
+      return
+    }
+
     if (!isPlatformSupported) {
       showAutofillMessage('Unsupported platform', 'error')
       return
@@ -45,7 +56,8 @@ export function useAutofill({
       const contentScriptActive = await isContentScriptActive()
 
       if (!contentScriptActive) {
-        showAutofillMessage('Refresh the job page, then try again', 'error')
+        setNeedsRefresh(true)
+        showAutofillMessage('Connection lost. Click again to reload page.', 'error')
         return
       }
 
@@ -79,5 +91,6 @@ export function useAutofill({
     autofillStatus,
     handleAutofill,
     isAutofilling,
+    needsRefresh,
   }
 }

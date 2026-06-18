@@ -5,9 +5,14 @@ import {
 } from './handlers.js'
 import { logPageState, markContentScriptLoaded } from './lifecycle.js'
 import startSubmissionDetection from './submissionDetection.js'
+import { startGreenhouseUploadObserver } from '../greenhouse/observer.js'
 import { MESSAGE_ACTIONS } from '../types/messages.js'
 
 markContentScriptLoaded()
+
+startGreenhouseUploadObserver().catch((error) => {
+  console.warn('ApplyFlow: Greenhouse upload observer failed', error)
+})
 
 // Always attach the listener so the extension can recover after a developer reload.
 // Vite's module caching prevents this from duplicating within the same context.

@@ -42,6 +42,14 @@ const FIELD_KEYWORDS = {
   website: ['website', 'personal site', 'personal website'],
   currentCompany: ['current company', 'current employer', 'employer', 'company'],
   resume: ['resume', 'cv'],
+  timeZone: [
+    'time zone',
+    'timezone',
+    'operating time zone',
+    'primary time zone',
+    'most commonly operate in',
+    'which timezone',
+  ],
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +117,7 @@ function buildFieldInfo(element) {
 /**
  * Detect all relevant form fields on the current page.
  *
- * @returns {{ name: Array, motivationStatement: Array, preferredFirstName: Array, preferredLastName: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
+ * @returns {{ name: Array, motivationStatement: Array, timeZone: Array, preferredFirstName: Array, preferredLastName: Array, firstName: Array, lastName: Array, email: Array, phone: Array,
  *             address: Array, city: Array, state: Array, country: Array, postalCode: Array,
  *             linkedin: Array, github: Array, portfolio: Array, website: Array, currentCompany: Array,
  *             resume: Array, textarea: Array, select: Array, checkbox: Array }}
@@ -118,6 +126,7 @@ export function detectFormFields() {
   const fields = {
     name: [],
     motivationStatement: [],
+    timeZone: [],
     preferredFirstName: [],
     preferredLastName: [],
     firstName: [],
@@ -199,6 +208,8 @@ export function detectFormFields() {
       fields.currentCompany.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.name)) {
       fields.name.push(info)
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.timeZone)) {
+      fields.timeZone.push(info)
     }
   })
 
@@ -217,11 +228,16 @@ export function detectFormFields() {
   // --- Select / Dropdown ---
   const selects = document.querySelectorAll('select')
   selects.forEach((sel) => {
+    const text = getSearchableText(sel)
     const info = buildFieldInfo(sel)
     info.options = Array.from(sel.options).map((opt) => ({
       value: opt.value,
       text: opt.textContent.trim(),
     }))
+
+    if (matchesKeywords(text, FIELD_KEYWORDS.timeZone)) {
+      fields.timeZone.push(info)
+    }
     fields.select.push(info)
   })
 

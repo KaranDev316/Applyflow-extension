@@ -40,6 +40,9 @@ export const emptyProfile = {
   application: {
     motivationStatement: '',
   },
+  preferences: {
+    timeZone: '',
+  },
 }
 
 const requiredFields = ['personal.firstName', 'personal.lastName', 'personal.email']
@@ -91,6 +94,7 @@ export function normalizeProfile(profile = {}) {
   const professional = profile.professional || {}
   const social = profile.social || {}
   const application = profile.application || {}
+  const preferences = profile.preferences || {}
   const country = location.country === '' ? '' : toLocationCountry(location.country)
   const state = location.state === '' ? '' : toLocationState(location.state, country?.code)
   const city = location.city === '' ? '' : toLocationCity(location.city, country?.code, state?.code)
@@ -133,6 +137,9 @@ export function normalizeProfile(profile = {}) {
     },
     application: {
       motivationStatement: trimValue(application.motivationStatement),
+    },
+    preferences: {
+      timeZone: trimValue(preferences.timeZone),
     },
   }
 }

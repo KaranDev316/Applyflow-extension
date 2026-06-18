@@ -211,6 +211,10 @@ export function normalize(value) {
 }
 
 function scoreOption(optionText, desiredValue) {
+  if (Array.isArray(desiredValue)) {
+    return Math.max(...desiredValue.map((val) => scoreOption(optionText, val)))
+  }
+
   const normalizedOption = normalize(optionText)
   const normalizedDesired = normalize(desiredValue)
 
@@ -305,6 +309,13 @@ function verifySelection(element, value) {
     element.getAttribute?.('aria-label') || '',
   ].join(' ')
 
+  if (Array.isArray(value)) {
+    return value.some((val) => {
+      const desired = normalize(val)
+      return !desired || normalize(text).includes(desired)
+    })
+  }
+
   const desired = normalize(value)
   return !desired || normalize(text).includes(desired)
 }
@@ -322,7 +333,7 @@ function fillTextInput(element, value) {
 }
 
 function fillNativeSelect(element, value) {
-  if (!value) return false
+  if (!value || (Array.isArray(value) && value.length === 0)) return false
 
   const options = Array.from(element.options)
   const match = findBestOption(options, value)
@@ -359,14 +370,16 @@ async function fillAutocomplete(element, value) {
   const interactionTarget = input || element
   const maxAttempts = input ? MAX_DROPDOWN_RETRIES : 1
 
+  const typeValue = Array.isArray(value) ? value[0] : String(value)
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     focusElement(interactionTarget)
     clickLikeUser(interactionTarget)
 
     if (input) {
-      await typeHuman(input, value)
+      await typeHuman(input, typeValue)
     } else {
-      for (const char of String(value)) {
+      for (const char of String(typeValue)) {
         dispatchKeyboardEvent(interactionTarget, 'keydown', char)
         dispatchKeyboardEvent(interactionTarget, 'keypress', char)
         dispatchKeyboardEvent(interactionTarget, 'keyup', char)
@@ -420,7 +433,15 @@ const PROFILE_FIELD_MAP = [
   { profileKey: 'social.portfolio', fieldCategory: 'portfolio' },
   { profileKey: 'social.website', fieldCategory: 'website' },
   { profileKey: 'professional.currentCompany', fieldCategory: 'currentCompany' },
+  { profileKey: 'preferences.timeZone', fieldCategory: 'timeZone' },
 ]
+
+const TIMEZONE_MAPPINGS = {
+  PT: ['pacific', 'pacific time', 'pst', 'pdt'],
+  MT: ['mountain', 'mountain time', 'mst', 'mdt'],
+  CT: ['central', 'central time', 'cst', 'cdt'],
+  ET: ['eastern', 'eastern time', 'est', 'edt'],
+}
 
 function getProfileValue(profile, path) {
   if (path === 'name') {
@@ -462,14 +483,27 @@ function getLegacyProfileValue(profile, path) {
 
 export async function fillField(element, value) {
   if (!element?.isConnected) return false
-  if (value === undefined || value === null) return false
+  if (value === undefined || value === null || value === '') return false
+  if (Array.isArray(value) && value.length === 0) return false
 
   const tag = element.tagName.toLowerCase()
   const fieldType = detectFieldType(element)
 
+  // Do not overwrite existing user input
+  if ((tag === 'input' && element.type !== 'checkbox' && element.type !== 'radio') || tag === 'textarea') {
+    if (element.value?.trim()) return false
+  }
+  if (fieldType === 'native-select') {
+    if (element.value && element.selectedIndex > 0) return false
+  }
+  if (fieldType === 'combobox' || fieldType === 'autocomplete' || fieldType === 'custom-select') {
+    const input = findComboboxInput(element)
+    if (input && input.value?.trim()) return false
+  }
+
   try {
     if (fieldType === 'native-select') {
-      return fillNativeSelect(element, String(value))
+      return fillNativeSelect(element, value)
     }
 
     if (tag === 'input' && element.type === 'checkbox') {
@@ -477,11 +511,12 @@ export async function fillField(element, value) {
     }
 
     if (fieldType === 'combobox' || fieldType === 'autocomplete' || fieldType === 'custom-select') {
-      return fillAutocomplete(element, String(value))
+      return fillAutocomplete(element, value)
     }
 
     if (fieldType === 'textarea' || tag === 'input') {
-      return fillTextInput(element, String(value))
+      const textValue = Array.isArray(value) ? String(value[0]) : String(value)
+      return fillTextInput(element, textValue)
     }
 
     console.warn('ApplyFlow: Skipping unsupported element', tag, element)
@@ -498,17 +533,26 @@ export async function autofillFromProfile(profile, fields) {
   let skippedCount = 0
 
   for (const { profileKey, fieldCategory } of PROFILE_FIELD_MAP) {
-    const value = getProfileValue(profile, profileKey) || getLegacyProfileValue(profile, profileKey)
+    const rawValue = getProfileValue(profile, profileKey) || getLegacyProfileValue(profile, profileKey)
     const candidates = fields[fieldCategory]
 
-    if (!value || !candidates || candidates.length === 0) {
+    if (!rawValue || !candidates || candidates.length === 0) {
       skippedCount += 1
-      details.push({ field: fieldCategory, status: 'skipped', reason: !value ? 'empty_value' : 'no_match' })
+      details.push({ field: fieldCategory, status: 'skipped', reason: !rawValue ? 'empty_value' : 'no_match' })
       continue
     }
 
     const target = candidates[0]
-    const filled = await fillField(target.element, value)
+    let fillValue = rawValue
+
+    if (fieldCategory === 'timeZone' && TIMEZONE_MAPPINGS[rawValue]) {
+      const fieldType = detectFieldType(target.element)
+      if (['native-select', 'combobox', 'autocomplete', 'custom-select'].includes(fieldType)) {
+        fillValue = TIMEZONE_MAPPINGS[rawValue]
+      }
+    }
+
+    const filled = await fillField(target.element, fillValue)
 
     if (filled) {
       filledCount += 1

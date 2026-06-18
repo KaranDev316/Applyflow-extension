@@ -48,6 +48,23 @@ const sections = [
       { id: 'application.motivationStatement', label: 'Motivation Statement', type: 'textarea' },
     ],
   },
+  {
+    title: 'Preferences',
+    fields: [
+      {
+        id: 'preferences.timeZone',
+        label: 'Primary Time Zone',
+        type: 'select',
+        options: [
+          { value: '', label: 'Select a time zone' },
+          { value: 'PT', label: 'Pacific Time (PT)' },
+          { value: 'MT', label: 'Mountain Time (MT)' },
+          { value: 'CT', label: 'Central Time (CT)' },
+          { value: 'ET', label: 'Eastern Time (ET)' },
+        ],
+      },
+    ],
+  },
 ]
 
 function getFieldValue(profile, fieldId) {

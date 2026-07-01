@@ -201,6 +201,23 @@ test('Dropdown selections apply correctly with visible text matching', async () 
   assert.equal(changeFired, true)
 })
 
+test('Autofill does not overwrite native selects with meaningful zero values', async () => {
+  setupDom(`
+    <label for="country">Country</label>
+    <select id="country" name="country" aria-label="Country">
+      <option value="0">United Kingdom</option>
+      <option value="US">United States</option>
+    </select>
+  `)
+
+  const select = document.getElementById('country')
+
+  assert.equal(select.value, '0')
+  assert.equal(select.selectedIndex, 0)
+  assert.equal(await fillField(select, 'United States'), false)
+  assert.equal(select.value, '0')
+})
+
 test('Textareas populate correctly and emit input events', async () => {
   setupDom(`
     <textarea id="cover_story" name="cover_story" placeholder="Tell us about yourself"></textarea>

@@ -42,6 +42,7 @@ export const emptyProfile = {
   },
   preferences: {
     timeZone: '',
+    minimumSalary: null,
   },
 }
 
@@ -105,6 +106,14 @@ export function normalizeProfile(profile = {}) {
     phone = rawPhoneInput.trim()
   }
 
+  let minimumSalary = null
+  if (preferences.minimumSalary !== null && preferences.minimumSalary !== undefined && preferences.minimumSalary !== '') {
+    const parsed = Number(preferences.minimumSalary)
+    if (!isNaN(parsed)) {
+      minimumSalary = parsed
+    }
+  }
+
   return {
     personal: {
       firstName: trimValue(personal.firstName) || migratedName.firstName,
@@ -140,6 +149,7 @@ export function normalizeProfile(profile = {}) {
     },
     preferences: {
       timeZone: trimValue(preferences.timeZone),
+      minimumSalary,
     },
   }
 }

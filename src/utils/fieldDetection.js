@@ -50,6 +50,18 @@ const FIELD_KEYWORDS = {
     'most commonly operate in',
     'which timezone',
   ],
+  salaryAlignment: [
+    'comfortable moving forward',
+    'comfortable with this range',
+    'salary range',
+    'pay range',
+    'compensation range',
+    'compensation expectations',
+    'salary expectations',
+    'aligned with this range',
+    'acceptable compensation',
+    'acceptable salary',
+  ],
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +122,52 @@ function buildFieldInfo(element) {
   }
 }
 
+function extractSalaryRange(text) {
+  if (!text) return null
+  const regex = /(?:[$£€]\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k)?\s*(?:-|to|–|—)\s*(?:[$£€]\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k)?/i
+  const match = text.match(regex)
+  if (match) {
+    let min = parseFloat(match[1].replace(/,/g, ''))
+    if (match[2] && match[2].toLowerCase() === 'k') min *= 1000
+
+    let max = parseFloat(match[3].replace(/,/g, ''))
+    if (match[4] && match[4].toLowerCase() === 'k') max *= 1000
+
+    if (min < 1000 && max >= 1000) min *= 1000
+
+    return { minSalary: min, maxSalary: max }
+  }
+  return null
+}
+
+function getRawExtendedText(element) {
+  const texts = [
+    element.name || '',
+    element.id || '',
+    getAssociatedLabel(element),
+    element.placeholder || '',
+    element.getAttribute('aria-label') || '',
+  ]
+
+  const fieldset = element.closest('fieldset')
+  if (fieldset) {
+    const legend = fieldset.querySelector('legend')
+    if (legend) texts.push(legend.textContent)
+  }
+  const describedBy = element.getAttribute('aria-describedby')
+  if (describedBy) {
+    describedBy.split(/\s+/).forEach((id) => {
+      const descEl = document.getElementById(id)
+      if (descEl) texts.push(descEl.textContent)
+    })
+  }
+  const wrapper = element.closest('.field, .application-field, .form-group, .posting-question, [role="group"]')
+  if (wrapper) {
+    texts.push(wrapper.textContent)
+  }
+  return texts.join(' ')
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -127,6 +185,7 @@ export function detectFormFields() {
     name: [],
     motivationStatement: [],
     timeZone: [],
+    salaryAlignment: [],
     preferredFirstName: [],
     preferredLastName: [],
     firstName: [],
@@ -172,6 +231,9 @@ export function detectFormFields() {
     const text = getSearchableText(input)
     const info = buildFieldInfo(input)
 
+    const rawExtendedText = getRawExtendedText(input)
+    const lowerExtendedText = rawExtendedText.toLowerCase()
+
     if (input.type === 'email' || matchesKeywords(text, FIELD_KEYWORDS.email)) {
       fields.email.push(info)
     } else if (input.type === 'tel' || matchesKeywords(text, FIELD_KEYWORDS.phone)) {
@@ -210,6 +272,13 @@ export function detectFormFields() {
       fields.name.push(info)
     } else if (matchesKeywords(text, FIELD_KEYWORDS.timeZone)) {
       fields.timeZone.push(info)
+    } else if (matchesKeywords(lowerExtendedText, FIELD_KEYWORDS.salaryAlignment)) {
+      const range = extractSalaryRange(rawExtendedText)
+      if (range) {
+        info.extractedMinSalary = range.minSalary
+        info.extractedMaxSalary = range.maxSalary
+        fields.salaryAlignment.push(info)
+      }
     }
   })
 
@@ -235,9 +304,20 @@ export function detectFormFields() {
       text: opt.textContent.trim(),
     }))
 
-    if (matchesKeywords(text, FIELD_KEYWORDS.timeZone)) {
+    const rawExtendedText = getRawExtendedText(sel)
+    const lowerExtendedText = rawExtendedText.toLowerCase()
+
+    if (matchesKeywords(lowerExtendedText, FIELD_KEYWORDS.salaryAlignment)) {
+      const range = extractSalaryRange(rawExtendedText)
+      if (range) {
+        info.extractedMinSalary = range.minSalary
+        info.extractedMaxSalary = range.maxSalary
+        fields.salaryAlignment.push(info)
+      }
+    } else if (matchesKeywords(text, FIELD_KEYWORDS.timeZone)) {
       fields.timeZone.push(info)
     }
+
     fields.select.push(info)
   })
 
@@ -246,6 +326,34 @@ export function detectFormFields() {
   checkboxes.forEach((cb) => {
     const info = buildFieldInfo(cb)
     fields.checkbox.push(info)
+  })
+
+  // --- Radio Buttons ---
+  const radios = Array.from(document.querySelectorAll('input[type="radio"]'))
+  const radioGroups = new Map()
+  radios.forEach((radio) => {
+    const groupKey = radio.name || radio.closest('.field, .application-field, .form-group, .posting-question, [role="group"]') || radio
+    if (!radioGroups.has(groupKey)) {
+      radioGroups.set(groupKey, [])
+    }
+    radioGroups.get(groupKey).push(radio)
+  })
+
+  radioGroups.forEach((group) => {
+    const firstRadio = group[0]
+    const rawText = getRawExtendedText(firstRadio)
+    
+    if (matchesKeywords(rawText.toLowerCase(), FIELD_KEYWORDS.salaryAlignment)) {
+      const range = extractSalaryRange(rawText)
+      if (range) {
+        const info = buildFieldInfo(firstRadio)
+        info.type = 'radio-group'
+        info.extractedMinSalary = range.minSalary
+        info.extractedMaxSalary = range.maxSalary
+        info.radioElements = group
+        fields.salaryAlignment.push(info)
+      }
+    }
   })
 
   // --- File inputs (resume / CV) ---

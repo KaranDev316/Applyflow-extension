@@ -50,7 +50,9 @@ const sections = [
   },
   {
     title: 'Preferences',
+    description: 'The lowest annual salary you would accept. Used to automatically answer salary range alignment questions.',
     fields: [
+      { id: 'preferences.minimumSalary', label: 'Minimum Acceptable Salary', type: 'number' },
       {
         id: 'preferences.timeZone',
         label: 'Primary Time Zone',

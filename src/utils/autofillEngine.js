@@ -356,6 +356,31 @@ function fillCheckbox(element, value) {
   return true
 }
 
+function fillRadioGroup(elements, value) {
+  if (!elements || elements.length === 0) return false
+  
+  const desired = normalize(value)
+  let match = null
+  for (const radio of elements) {
+    const labelText = normalize(getAssociatedLabelText(radio) || radio.value)
+    if (labelText === desired || labelText.includes(desired)) {
+      match = radio
+      break
+    }
+  }
+  
+  if (match && !match.checked) {
+    clickLikeUser(match)
+    if (!match.checked) {
+      match.checked = true
+    }
+    dispatchInputEvents(match)
+    return true
+  }
+  
+  return false
+}
+
 async function keyboardSelect(element) {
   dispatchKeyboardEvent(element, 'keydown', 'ArrowDown')
   dispatchKeyboardEvent(element, 'keyup', 'ArrowDown')
@@ -434,6 +459,7 @@ const PROFILE_FIELD_MAP = [
   { profileKey: 'social.website', fieldCategory: 'website' },
   { profileKey: 'professional.currentCompany', fieldCategory: 'currentCompany' },
   { profileKey: 'preferences.timeZone', fieldCategory: 'timeZone' },
+  { profileKey: 'preferences.minimumSalary', fieldCategory: 'salaryAlignment' },
 ]
 
 const TIMEZONE_MAPPINGS = {
@@ -477,31 +503,42 @@ function getLegacyProfileValue(profile, path) {
   return profile?.[legacyKey]
 }
 
+function hasNonEmptyValue(value) {
+  return value !== undefined && value !== null && String(value).trim().length > 0
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fillField(element, value) {
+export async function fillField(element, value, fieldInfo = null) {
   if (!element?.isConnected) return false
   if (value === undefined || value === null || value === '') return false
   if (Array.isArray(value) && value.length === 0) return false
 
   const tag = element.tagName.toLowerCase()
-  const fieldType = detectFieldType(element)
+  const fieldType = fieldInfo?.type || detectFieldType(element)
 
   // Do not overwrite existing user input
   if ((tag === 'input' && element.type !== 'checkbox' && element.type !== 'radio') || tag === 'textarea') {
-    if (element.value?.trim()) return false
+    if (hasNonEmptyValue(element.value)) return false
   }
   if (fieldType === 'native-select') {
-    if (element.value && element.selectedIndex > 0) return false
+    if (hasNonEmptyValue(element.value)) return false
   }
   if (fieldType === 'combobox' || fieldType === 'autocomplete' || fieldType === 'custom-select') {
     const input = findComboboxInput(element)
-    if (input && input.value?.trim()) return false
+    if (input && hasNonEmptyValue(input.value)) return false
+  }
+  if (fieldType === 'radio-group' && fieldInfo?.radioElements) {
+    if (fieldInfo.radioElements.some((r) => r.checked)) return false
   }
 
   try {
+    if (fieldType === 'radio-group' && fieldInfo?.radioElements) {
+      return fillRadioGroup(fieldInfo.radioElements, value)
+    }
+
     if (fieldType === 'native-select') {
       return fillNativeSelect(element, value)
     }
@@ -536,9 +573,9 @@ export async function autofillFromProfile(profile, fields) {
     const rawValue = getProfileValue(profile, profileKey) || getLegacyProfileValue(profile, profileKey)
     const candidates = fields[fieldCategory]
 
-    if (!rawValue || !candidates || candidates.length === 0) {
+    if ((rawValue === undefined || rawValue === null || rawValue === '') || !candidates || candidates.length === 0) {
       skippedCount += 1
-      details.push({ field: fieldCategory, status: 'skipped', reason: !rawValue ? 'empty_value' : 'no_match' })
+      details.push({ field: fieldCategory, status: 'skipped', reason: (rawValue === undefined || rawValue === null || rawValue === '') ? 'empty_value' : 'no_match' })
       continue
     }
 
@@ -552,7 +589,31 @@ export async function autofillFromProfile(profile, fields) {
       }
     }
 
-    const filled = await fillField(target.element, fillValue)
+    if (fieldCategory === 'salaryAlignment') {
+      if (rawValue === null || rawValue === undefined || rawValue === '') {
+        skippedCount += 1
+        details.push({ field: fieldCategory, status: 'skipped', reason: 'no_minimum_salary_set' })
+        continue
+      }
+
+      const minSalary = Number(rawValue)
+      if (isNaN(minSalary)) {
+        skippedCount += 1
+        details.push({ field: fieldCategory, status: 'skipped', reason: 'invalid_minimum_salary' })
+        continue
+      }
+
+      const { extractedMaxSalary } = target
+      if (!extractedMaxSalary) {
+        skippedCount += 1
+        details.push({ field: fieldCategory, status: 'skipped', reason: 'no_salary_extracted' })
+        continue
+      }
+
+      fillValue = extractedMaxSalary >= minSalary ? 'Yes' : 'No'
+    }
+
+    const filled = await fillField(target.element, fillValue, target)
 
     if (filled) {
       filledCount += 1

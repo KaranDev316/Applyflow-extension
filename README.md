@@ -1,454 +1,154 @@
-# ApplyFlow Extension
+# ApplyFlow
 
-A lightweight Chrome extension that autofills repetitive job applications and tracks applications across hiring platforms.
+ApplyFlow is a Chrome extension that helps job seekers move through repetitive job applications faster. It stores reusable profile details locally, detects supported application platforms, autofills common fields, attaches saved documents, and keeps a lightweight history of applications.
 
----
+This project demonstrates my ability to build a real browser-extension workflow with React, Chrome Extension Manifest V3, content scripts, runtime messaging, browser storage, form automation, and test coverage.
 
-## Overview
+![ApplyFlow extension showing Greenhouse support, job autofill, and application tracking](public/applyflow.png)
 
-ApplyFlow helps job seekers reduce repetitive work during job applications.
+## What It Does
 
-Instead of manually retyping the same information across every application form, ApplyFlow acts as a productivity copilot that:
+- Detects supported job application pages on Greenhouse and Lever
+- Autofills common application fields from a saved local profile
+- Supports text inputs, email inputs, phone inputs, textareas, selects, custom dropdowns, autocomplete fields, and checkboxes
+- Stores resume and optional cover letter PDFs locally for Greenhouse upload flows
+- Tracks application history with company, role, URL, date, and status
+- Shows a popup dashboard for profile management, platform status, autofill, and application tracking
+- Tracks autofill usage statistics locally
 
-- Autofills repetitive fields
-- Tracks submitted applications
-- Stores reusable profile information
-- Reduces application fatigue
+## Why I Built It
 
-Currently supported platforms:
+Applying to jobs often means typing the same information over and over across different hiring platforms. ApplyFlow is designed as a productivity tool, not an automated job-application bot. The user stays in control: they open an application, review the page, and trigger autofill from the extension popup.
 
-- Greenhouse
-- Lever
+The project focuses on practical frontend engineering problems:
 
-Future support planned for additional hiring platforms.
+- Building a Chrome extension with separate popup, content, and background contexts
+- Coordinating data through Chrome runtime messaging
+- Handling dynamic React-based application forms
+- Filling real-world form controls that do not always behave like plain HTML inputs
+- Persisting user data without a backend
+- Keeping the UI compact and useful inside an extension popup
 
----
+## Tech Stack
 
-# Product Vision
-
-ApplyFlow is **not**:
-
-- A bot army
-- A LinkedIn scraper
-- An autonomous AI applying to jobs
-
-ApplyFlow **is**:
-
-> A browser productivity assistant for job seekers.
-
-This distinction matters technically and legally.
-
-The goal is to help users complete applications faster while remaining fully in control.
-
----
-
-# Core Features
-
-## 1. Profile Vault
-
-Users can securely store reusable application information locally in the browser.
-
-### Supported Fields
-
-- Full Name
-- Email
-- Phone
-- LinkedIn
-- GitHub
-- Portfolio
-- Location
-- Resume URL
-- Years of Experience
-
-### Storage
-
-Uses:
-
-```txt
-chrome.storage.local
-```
-
-No backend required for MVP.
-
----
-
-## 2. Smart Autofill
-
-### User Flow
-
-1. Open a supported job application
-2. Open the extension popup
-3. Click:
-
-```txt
-Smart Autofill
-```
-
-4. Matching fields populate automatically
-
----
-
-## Supported Inputs
-
-ApplyFlow currently detects and fills:
-
-- Text inputs
-- Email fields
-- Phone fields
-- Textareas
-- Dropdown/select fields
-- Checkboxes
-
----
-
-## Supported Platforms
-
-### Tier 1 Platforms
-
-- Greenhouse
-- Lever
-
-These platforms were selected because they are:
-
-- Widely used
-- Structurally predictable
-- Ideal for MVP reliability
-
----
-
-## 3. Job Tracker
-
-Whenever autofill runs successfully, ApplyFlow stores:
-
-- Company name
-- Role title
-- Application URL
-- Application date
-
-Users can track applications directly inside the popup dashboard.
-
-### Example
-
-```txt
-Google — Frontend Engineer
-Applied: May 17
-```
-
----
-
-## 4. Autofill Analytics
-
-ApplyFlow tracks:
-
-- Total autofills
-- Total fields filled
-- Application activity
-
-Stored locally using browser storage.
-
----
-
-# Architecture
-
-## Frontend
-
-Built with:
-
-- React
+- React 19
 - Vite
-- TailwindCSS
+- Tailwind CSS
 - Chrome Extension Manifest V3
+- `@crxjs/vite-plugin`
+- Chrome `storage`, `activeTab`, and `scripting` APIs
+- Zod for profile validation
+- Node test runner with jsdom
 
-### Responsibilities
-
-- Popup UI
-- Profile management
-- Tracker dashboard
-- Autofill controls
-
----
-
-## Content Scripts
-
-Injected into supported hiring platforms.
-
-### Responsibilities
-
-- Detect fields
-- Autofill forms
-- Extract metadata
-- Monitor dynamic React forms
-
----
-
-## Background Script
-
-Handles:
-
-- Extension lifecycle
-- Runtime messaging
-- Future authentication hooks
-- Future sync support
-
----
-
-## Browser Storage
-
-Uses:
-
-```txt
-chrome.storage.local
-```
-
-Stores:
-
-- Profile data
-- Application history
-- Autofill statistics
-- Extension settings
-
----
-
-# Folder Structure
+## Project Structure
 
 ```txt
 src/
-├── adapters/
-├── assets/
-├── background/
-├── components/
-├── content/
-├── hooks/
-├── popup/
-│   ├── index.jsx
-│   └── Popup.jsx
-├── storage/
-├── types/
-├── utils/
-│   ├── autofillEngine.js
-│   ├── autofillStats.js
-│   ├── fieldDetection.js
-│   ├── messaging.js
-│   ├── metadataExtractor.js
-│   ├── platformDetection.js
-│   ├── platformMetadata.js
-│   ├── profileStorage.js
-│   └── storageUtil.js
+├── adapters/      Platform adapters for Greenhouse and Lever
+├── background/    Extension service worker
+├── components/    Reusable popup UI components
+├── content/       Content scripts, page lifecycle, and submission handling
+├── hooks/         React hooks for profile, platform, autofill, and history state
+├── popup/         Extension popup dashboard
+├── storage/       Browser storage helpers
+├── types/         Message contracts
+└── utils/         Autofill, field detection, validation, and metadata utilities
 ```
 
----
+## Key Features
 
-# Dynamic Form Handling
+### Smart Autofill
 
-ApplyFlow is designed to work reliably with modern React-based job application forms.
+The autofill engine maps saved profile data to fields found on the current application page. It uses browser events that mimic user interaction so modern frameworks can detect changes correctly.
 
-### Features
+It handles:
 
-- Retry detection after DOM updates
-- MutationObserver support
-- Duplicate autofill prevention
-- Safe handling of unknown fields
-- Proper input/change event triggering
+- Native text inputs and textareas
+- Native select fields
+- Custom select widgets
+- Combobox and autocomplete fields
+- Checkbox-style fields
+- Validation-aware retry behavior for dropdowns
 
----
+### Platform Detection
 
-# Safety & Compliance
+ApplyFlow detects whether the active tab is on a supported platform and surfaces that status inside the popup before the user runs autofill.
 
-ApplyFlow intentionally does NOT:
+Supported platforms:
 
-- Auto-submit applications
-- Bypass CAPTCHA
-- Scrape LinkedIn aggressively
-- Automate external account actions
+- Greenhouse
+- Lever
 
-This keeps the extension:
+### Resume and Cover Letter Storage
 
-- Safer
-- More stable
-- Legally lower-risk
-- Easier to maintain
+Users can upload a resume PDF and optional cover letter PDF once. The files are stored through `chrome.storage.local` and reused during supported application flows.
 
----
+### Application Tracker
 
-# Development
+The popup includes a simple dashboard for reviewing applications. Users can filter between all applications, applied applications, and drafts.
 
-## Install Dependencies
+Tracked fields include:
+
+- Company
+- Role
+- Application URL
+- Application date
+- Status
+
+### Local-First Data Model
+
+ApplyFlow does not require a backend for the current MVP. Profile data, application history, uploaded document data, and autofill statistics are stored locally in the browser.
+
+## Getting Started
+
+Install dependencies:
 
 ```bash
 npm install
 ```
 
----
-
-## Run Development Server
+Run the development server:
 
 ```bash
 npm run dev
 ```
 
----
-
-## Build Extension
+Build the extension:
 
 ```bash
 npm run build
 ```
 
----
+Run tests:
 
-## Load Extension in Chrome
-
-1. Open:
-
-```txt
-chrome://extensions
+```bash
+npm test
 ```
 
-2. Enable:
+Run linting:
 
-```txt
-Developer Mode
+```bash
+npm run lint
 ```
 
-3. Click:
+## Loading the Extension in Chrome
 
-```txt
-Load unpacked
-```
+1. Run `npm run build`.
+2. Open `chrome://extensions`.
+3. Enable Developer Mode.
+4. Click "Load unpacked".
+5. Select the generated `dist` folder.
 
-4. Select the project `dist/` folder
+## Current Status
 
----
+ApplyFlow is an MVP focused on reliable autofill and application tracking for Greenhouse and Lever. Future improvements could include broader platform support, encrypted sync, richer analytics, and more advanced document handling.
 
-# MVP Roadmap
+## What This Project Shows
 
-## Current MVP
-
-- Profile Vault
-- Smart Autofill
-- Job Tracker
-- Greenhouse Support
-- Lever Support
-
----
-
-## Planned Features
-
-### AI Quick Answers
-
-Generate reusable answers for:
-
-- “Why do you want this role?”
-- “Tell us about yourself”
-
----
-
-# Future Expansion
-
-Planned Phase 2 features:
-
-- Cloud sync
-- User accounts
-- Subscriptions
-- Analytics
-- Resume variants
-- AI-assisted applications
-- Interview preparation tools
-
----
-
-# Monetization Strategy
-
-## Free Tier
-
-- Unlimited autofill
-- Limited tracker history
-
-OR
-
-- Limited daily autofills
-
----
-
-## Pro Tier (Future)
-
-Planned pricing:
-
-```txt
-₹299–499/month
-```
-
-### Potential Features
-
-- AI answers
-- Unlimited history
-- Analytics
-- Export tools
-- Resume variants
-
----
-
-# Target Users
-
-Designed primarily for:
-
-- Developers
-- Tech job seekers
-- Recent graduates
-- Remote workers
-- Laid-off professionals
-- High-volume applicants
-
----
-
-# Core Promise
-
-> Fill job applications in seconds instead of minutes.
-
----
-
-# Success Criteria
-
-Initial success is NOT:
-
-- 10,000 users instantly
-
-Initial success IS:
-
-- Shipping publicly
-- First real users
-- First organic installs
-- First paid customer
-- Solving a real problem consistently
-
----
-
-# Tech Stack
-
-## Extension
-
-- React
-- Vite
-- Chrome Extension Manifest V3
-
-## Styling
-
-- TailwindCSS
-
-## Future Backend
-
-- Node.js
-- Express
-- PostgreSQL / Supabase
-
----
-
-# Final Product Definition
-
-> “A lightweight Chrome extension that autofills repetitive job applications and tracks applications across hiring platforms.”
-
-Useful.  
-Focused.  
-Realistic.  
-Monetizable.  
-Shippable.
+- Chrome extension architecture with Manifest V3
+- React popup UI design for constrained browser-extension space
+- Content-script automation against third-party web apps
+- Local persistence with Chrome storage APIs
+- Form field detection and autofill logic
+- Testable utility and storage layers
+- Product thinking around user control, privacy, and workflow speed
